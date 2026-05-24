@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a212b;
+    --panel-2: #222c38;
+    --line: #2c3947;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #4ea1ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    padding: 16px;
+    padding-bottom: 40px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  .clock { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card .value { font-size: 28px; font-weight: 650; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .card .delta { font-size: 12px; margin-top: 4px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .wide { grid-column: 1 / -1; }
+  .panel-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+  svg { display: block; width: 100%; height: auto; }
+  .bars { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+  .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .bar {
+    width: 100%;
+    background: linear-gradient(180deg, var(--accent), #2d6fc4);
+    border-radius: 6px 6px 0 0;
+    transition: height 0.6s cubic-bezier(.2,.8,.2,1);
+    min-height: 2px;
+  }
+  .bar-label { font-size: 11px; color: var(--muted); }
+  .list { list-style: none; }
+  .list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .list li:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.green { background: var(--green); }
+  .dot.amber { background: var(--amber); }
+  .dot.red { background: var(--red); }
+  .list .time { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .two-col { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 720px) { .two-col { grid-template-columns: 1.4fr 1fr; } }
+  footer { margin-top: 20px; text-align: center; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard</h1>
+    <div class="clock" id="clock">—</div>
+  </header>
+
+  <section class="grid" id="stats"></section>
+
+  <section class="two-col">
+    <div class="card">
+      <div class="panel-title">Weekly Activity</div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <div class="panel-title">Recent Events</div>
+      <ul class="list" id="events"></ul>
+    </div>
+  </section>
+
+  <footer>Static dashboard &middot; auto-refreshes every 5s</footer>
+
+<script>
+  const stats = [
+    { label: "Active Users", base: 1284, fmt: n => n.toLocaleString() },
+    { label: "Revenue", base: 8420, fmt: n => "$" + n.toLocaleString() },
+    { label: "Conversion", base: 3.4, fmt: n => n.toFixed(1) + "%" },
+    { label: "Avg Latency", base: 142, fmt: n => n + "ms" },
+  ];
+
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const eventPool = [
+    { text: "Deployment succeeded", level: "green" },
+    { text: "New signup spike", level: "green" },
+    { text: "Cache warming complete", level: "green" },
+    { text: "Latency above threshold", level: "amber" },
+    { text: "Disk usage at 78%", level: "amber" },
+    { text: "Payment webhook retried", level: "amber" },
+    { text: "API 500 error", level: "red" },
+  ];
+
+  function rand(seed) { return Math.sin(seed) * 10000 % 1; }
+
+  function renderStats() {
+    const el = document.getElementById("stats");
+    el.innerHTML = stats.map(s => {
+      const jitter = (Math.random() - 0.5) * 0.08;
+      const val = s.base * (1 + jitter);
+      const delta = (jitter * 100);
+      const dir = delta >= 0 ? "up" : "down";
+      const arrow = delta >= 0 ? "▲" : "▼";
+      return `<div class="card">
+        <div class="label">${s.label}</div>
+        <div class="value">${s.fmt(val)}</div>
+        <div class="delta ${dir}">${arrow} ${Math.abs(delta).toFixed(1)}%</div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderBars() {
+    const el = document.getElementById("bars");
+    el.innerHTML = days.map(d => {
+      const h = 20 + Math.random() * 100;
+      return `<div class="bar-wrap">
+        <div class="bar" style="height:${h}px"></div>
+        <div class="bar-label">${d}</div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderEvents() {
+    const el = document.getElementById("events");
+    const picks = [...eventPool].sort(() => Math.random() - 0.5).slice(0, 5);
+    const now = Date.now();
+    el.innerHTML = picks.map((e, i) => {
+      const mins = (i + 1) * 7 + Math.floor(Math.random() * 5);
+      return `<li>
+        <span class="dot ${e.level}"></span>
+        ${e.text}
+        <span class="time">${mins}m ago</span>
+      </li>`;
+    }).join("");
+  }
+
+  function tickClock() {
+    document.getElementById("clock").textContent =
+      new Date().toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  function refresh() {
+    renderStats();
+    renderBars();
+    renderEvents();
+  }
+
+  tickClock();
+  refresh();
+  setInterval(tickClock, 1000);
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>
