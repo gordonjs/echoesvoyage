@@ -892,6 +892,38 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
 
       <div class="sec">
+        <div class="h">Rough placement (no pins)</div>
+        <div class="hint" style="margin-bottom:10px;">
+          Drops the parcel onto the map approximately so you can see it on the satellite
+          basemap before you have pins. Type a lat/long (grab one from Google Maps),
+          or stand on your land and tap <b>Use current position</b>, then <b>spin</b> the
+          parcel until its east edge lines up with Shadow Mountain Drive. Do the two-pin
+          calibration on site for real accuracy.
+        </div>
+        <div class="row">
+          <label class="field"><span class="lab">Anchor point</span>
+            <select id="roughRef"></select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field"><span class="lab">Latitude</span><input type="number" id="roughLat" step="0.0000001" placeholder="39.49…"/></label>
+          <label class="field"><span class="lab">Longitude</span><input type="number" id="roughLon" step="0.0000001" placeholder="-105.30…"/></label>
+        </div>
+        <div class="row">
+          <button class="btn" id="roughUseGPS">Use current position</button>
+          <button class="btn primary" id="roughPlace">Place on map</button>
+        </div>
+        <div class="row" style="align-items:center; gap:6px;">
+          <span class="lab" style="white-space:nowrap; margin:0;">Rotate</span>
+          <button class="btn" id="rotM5">−5°</button>
+          <button class="btn" id="rotM1">−1°</button>
+          <input type="number" id="roughRot" value="0" step="0.5" style="width:72px; text-align:center;"/>
+          <button class="btn" id="rotP1">+1°</button>
+          <button class="btn" id="rotP5">+5°</button>
+        </div>
+      </div>
+
+      <div class="sec">
         <div class="h">Two-pin calibration</div>
         <div class="hint" style="margin-bottom:10px;">
           Stand on a known property corner with an <b>RTK Fixed</b> solution, pick which corner it is, and Capture.
@@ -1089,6 +1121,38 @@ function applyCalibration(cal){
   showCalInfo();
   saveState();
   if(state.last) onPosition(state.last);
+}
+
+/* ---- rough placement: build a provisional calibration from one anchor + rotation ---- */
+function polyCentroidLocal(){
+  const p=PARCEL.poly; let A=0,cx=0,cy=0;
+  for(let i=0;i<p.length-1;i++){
+    const cr=p[i].e*p[i+1].n-p[i+1].e*p[i].n;
+    A+=cr; cx+=(p[i].e+p[i+1].e)*cr; cy+=(p[i].n+p[i+1].n)*cr;
+  }
+  A*=0.5; return {e:cx/(6*A), n:cy/(6*A)};
+}
+function roughRefLocal(){
+  const v=$('roughRef').value;
+  if(v==='center') return polyCentroidLocal();
+  const c=PARCEL.corners.find(x=>x.key===v); return {e:c.e, n:c.n};
+}
+function buildRoughCal(ref, lat, lon, rotDeg){
+  const {mLat,mLon}=metersPerDeg(lat);
+  const ang=rotDeg*D2R;
+  return {lat0:lat,lon0:lon,mLat,mLon,s:M_PER_FT,cos:Math.cos(ang),sin:Math.sin(ang),ang,
+          a1e:ref.e,a1n:ref.n,platDistFt:0,measDistM:0,rough:true};
+}
+function placeRough(refit){
+  const lat=parseFloat($('roughLat').value), lon=parseFloat($('roughLon').value);
+  if(!isFinite(lat)||!isFinite(lon)){ alert('Enter a lat/long, or tap "Use current position".'); return; }
+  const rot=parseFloat($('roughRot').value)||0;
+  if(refit) fitted=false;
+  applyCalibration(buildRoughCal(roughRefLocal(), lat, lon, rot));
+}
+function nudgeRot(d){
+  $('roughRot').value=((parseFloat($('roughRot').value)||0)+d).toFixed(1);
+  if(CAL && CAL.rough) placeRough(false);
 }
 
 /* ---- point-in-polygon & nearest boundary (ENU meters) ---- */
@@ -1450,6 +1514,13 @@ function doApplyCal(){
 function showCalInfo(){
   const box=$('calInfo');
   if(!CAL || CAL.demo){ box.style.display='none'; return; }
+  if(CAL.rough){
+    let r=(CAL.ang*R2D)%360; if(r>180)r-=360; if(r<-180)r+=360;
+    box.style.display='block';
+    box.innerHTML='<div class="hint" style="margin:0;">⚠ Approximate placement (no pins), rotation '+r.toFixed(1)+
+      '°. Switch the basemap to Satellite and spin until the east edge follows the road, then do the two-pin calibration on site for centimetre accuracy.</div>';
+    return;
+  }
   const measFt=CAL.measDistM*FT_PER_M;
   const scaleErr=(CAL.s/M_PER_FT-1)*100;
   let rot=(CAL.ang*R2D)%360; if(rot>180)rot-=360; if(rot<-180)rot+=360;
@@ -1514,6 +1585,9 @@ function initUI(){
   $('pin2corner').innerHTML=cornerOptions();
   if($('pin2corner').options.length>1) $('pin2corner').selectedIndex=1;
 
+  $('roughRef').innerHTML='<option value="center">Property center</option>'+
+    PARCEL.corners.map(c=>`<option value="${c.key}">${c.name}</option>`).join('');
+
   $('serialSupport').textContent = ('serial' in navigator)?'Web Serial: available ✓':'Web Serial: NOT available in this browser/context.';
 
   // panel open/close
@@ -1536,6 +1610,16 @@ function initUI(){
   $('btnWs').onclick=connectWS;
   $('btnDemo').onclick=startDemo;
   $('btnManual').onclick=setManual;
+
+  $('roughPlace').onclick=()=>placeRough(true);
+  $('roughUseGPS').onclick=()=>{
+    if(!state.last){ alert('No live position yet — connect a source first.'); return; }
+    $('roughLat').value=state.last.lat.toFixed(7); $('roughLon').value=state.last.lon.toFixed(7);
+    placeRough(true);
+  };
+  $('rotM5').onclick=()=>nudgeRot(-5); $('rotM1').onclick=()=>nudgeRot(-1);
+  $('rotP1').onclick=()=>nudgeRot(1);  $('rotP5').onclick=()=>nudgeRot(5);
+  $('roughRot').onchange=()=>{ if(CAL && CAL.rough) placeRough(false); };
 
   $('pin1cap').onclick=()=>startCapture(1);
   $('pin2cap').onclick=()=>startCapture(2);
