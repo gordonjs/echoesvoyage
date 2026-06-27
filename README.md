@@ -117,6 +117,25 @@ Notes:
   small absolute biases cancel — your in/out result is accurate relative to your
   corners as long as you're **RTK Fixed**.
 
+### Running fully wireless (no USB cable)
+
+Bluetooth carries everything — NMEA up to the app and corrections down to the
+receiver — so you can leave the USB cable off entirely:
+
+1. **Pair once:** Windows → Bluetooth & devices → Add device → pick the
+   receiver (e.g. `Surveyor-xxxx`). Windows creates a COM port for it; run
+   `python rtk_bridge.py --list` to find it (use the "outgoing" one), then use
+   that port as the `--source`.
+2. **Power:** with no USB cable the receiver runs on its internal battery —
+   keep it charged, or clip on a USB power bank (charging only, no data needed)
+   for long sessions.
+3. **Stay in range:** classic Bluetooth reaches ~10 m / 30 ft, so carry the
+   laptop with you (backpack, ATV) rather than leaving it parked across the
+   property. The bridge auto-reconnects if the link drops briefly, so short
+   dropouts heal themselves.
+4. **App stays in Bridge (WS) mode** — the browser's USB option can't see
+   classic Bluetooth, which is exactly why the bridge exists.
+
 ---
 
 ## Two-pin calibration (aligning the plat to the world)

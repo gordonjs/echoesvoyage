@@ -147,23 +147,50 @@ class SerialSource:
             import serial  # pyserial
         except ImportError:
             sys.exit("pyserial not installed. Run:  pip install pyserial")
+        self._serial = serial
         _, port, *rest = spec.split(":")
-        baud = int(rest[0]) if rest else 115200
-        print(f"[src] opening serial {port} @ {baud}")
-        self.ser = serial.Serial(port, baud, timeout=1)
+        self.port = port
+        self.baud = int(rest[0]) if rest else 115200
+        self.ser = None
         self.wlock = threading.Lock()
+        self._open()
+
+    def _open(self):
+        """Open the port, retrying forever so a Bluetooth dropout self-heals."""
+        first = True
+        while True:
+            try:
+                self.ser = self._serial.Serial(self.port, self.baud, timeout=1)
+                print(f"[src] serial open {self.port} @ {self.baud}")
+                return
+            except Exception as e:
+                if first:
+                    print(f"[src] waiting for {self.port} ({e}) - "
+                          "is the receiver on and Bluetooth paired?")
+                    first = False
+                time.sleep(3)
 
     def write(self, data):
         with self.wlock:
             try:
-                self.ser.write(data)
+                if self.ser:
+                    self.ser.write(data)
             except Exception as e:
                 print("[rtcm] serial write failed:", e)
 
     def read_loop(self, hub, state):
         buf = b""
         while True:
-            chunk = self.ser.read(256)
+            try:
+                chunk = self.ser.read(256)
+            except Exception as e:
+                print(f"[src] serial read error ({e}) - Bluetooth dropout? reconnecting")
+                try: self.ser.close()
+                except Exception: pass
+                self.ser = None
+                buf = b""
+                self._open()
+                continue
             if not chunk:
                 continue
             buf += chunk
