@@ -180,6 +180,10 @@ class SerialSource:
 
     def read_loop(self, hub, state):
         buf = b""
+        count = 0
+        last_gga = ""
+        last_print = time.monotonic()
+        nonascii = 0
         while True:
             try:
                 chunk = self.ser.read(256)
@@ -191,8 +195,22 @@ class SerialSource:
                 buf = b""
                 self._open()
                 continue
+            now = time.monotonic()
+            if now - last_print > 4:
+                if count:
+                    print(f"[src] NMEA flowing: {count} sentences  |  {gga_summary(last_gga)}")
+                elif nonascii:
+                    print(f"[src] receiving DATA but no NMEA ({nonascii} bytes) - the receiver "
+                          "is likely sending UBX/RTCM, not NMEA. Enable NMEA messages / Rover mode.")
+                else:
+                    print("[src] connected, but NO data from the receiver yet - is it in Rover "
+                          "mode with NMEA output enabled, and out under open sky?")
+                count = 0; nonascii = 0
+                last_print = now
             if not chunk:
                 continue
+            if not any(10 == b or 36 == b for b in chunk):  # no LF and no '$'
+                nonascii += len(chunk)
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
@@ -200,13 +218,26 @@ class SerialSource:
                 if not s:
                     continue
                 hub.broadcast(s + "\n")
+                count += 1
                 if s.startswith("$") and "GGA" in s[:7]:
                     state.set_gga(s)
+                    last_gga = s
 
 
 # --------------------------------------------------------------------------
 # NTRIP client: pull RTCM from a caster, write to the receiver, push GGA up
 # --------------------------------------------------------------------------
+_FIX = {"0": "No Fix", "1": "GPS (standalone)", "2": "DGPS",
+        "4": "RTK FIXED", "5": "RTK FLOAT", "6": "DeadReckon"}
+
+def gga_summary(line):
+    """Short human summary of a GGA sentence for the console heartbeat."""
+    p = line.split(",")
+    if len(p) > 8 and "GGA" in p[0]:
+        return f"fix={_FIX.get(p[6], p[6] or '?')}  sats={p[7] or '?'}  hdop={p[8] or '?'}"
+    return "waiting for GGA"
+
+
 def parse_ntrip_url(u):
     """ntrip://user:pass@host:port/MOUNT  (scheme + creds optional)."""
     for pre in ("ntrip://", "http://", "https://"):
