@@ -79,6 +79,44 @@ python rtk_bridge.py --source test
 Then in the app: **Data source → Bridge (WS) → Connect bridge**
 (`ws://localhost:8765`).
 
+### Getting RTK Fixed accuracy — laptop feeds corrections (Option B)
+
+Standalone GPS is ~1–2 m. To get **centimetre** accuracy the receiver needs a
+live stream of **RTK corrections (RTCM)**. The bridge can pull those from an
+NTRIP caster over **this laptop's internet** (e.g. Starlink) and inject them
+into the receiver over the same Bluetooth link — so the receiver needs no WiFi
+and no phone hotspot.
+
+```bash
+pip install pyserial
+
+# Relay NMEA up to the app AND feed corrections down to the receiver:
+python rtk_bridge.py --source serial:COM5:115200 \
+    --ntrip ntrip://USER:PASS@CASTER_HOST:PORT/MOUNTPOINT
+```
+
+What it does each second: connects to the caster with your credentials, sends
+your live position (GGA) up so network/VRS casters return the right
+corrections, streams the RTCM back, and writes it into the receiver. Within a
+minute or two of open sky the app's **Fix** pill goes FLOAT → **RTK FIX** and
+accuracy drops to a few cm.
+
+Pick a correction source and drop it into `--ntrip`:
+- **u-blox PointPerfect Flex** (~$15/mo via SparkFun, month-to-month, covers all
+  of Colorado, no local base) — use the Flex NTRIP host/port/mountpoint and
+  credentials from your subscription.
+- **RTK2go** (free community caster) — works if a base is within ~10–30 km;
+  the username is your email and password is usually `none`:
+  `--ntrip ntrip://you@email.com:none@rtk2go.com:2101/MountName`
+
+Notes:
+- On the SparkFun **Surveyor**, corrections are injected over **Bluetooth**, so
+  pair the receiver over Bluetooth and use that COM port as the `--source`.
+- The receiver computes the RTK fix; the app just displays the improved NMEA.
+- Because you calibrate with two pins measured by the same RTK-fixed receiver,
+  small absolute biases cancel — your in/out result is accurate relative to your
+  corners as long as you're **RTK Fixed**.
+
 ---
 
 ## Two-pin calibration (aligning the plat to the world)
