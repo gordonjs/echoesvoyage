@@ -76,8 +76,11 @@ python rtk_bridge.py --source tcp:192.168.4.1:2948
 python rtk_bridge.py --source test
 ```
 
-Then in the app: **Data source → Bridge (WS) → Connect bridge**
-(`ws://localhost:8765`).
+The bridge **also serves the web app and opens your browser automatically**, so
+you only run one command in one window — no separate `python -m http.server`
+needed. In the app choose **Data source → Bridge (WS) → Connect**
+(`ws://localhost:8765`). (Disable with `--no-web` / `--no-browser`; change the
+page port with `--web-port`.)
 
 ### Getting RTK Fixed accuracy — laptop feeds corrections (Option B)
 

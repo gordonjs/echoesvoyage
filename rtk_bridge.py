@@ -22,10 +22,18 @@ What it does
 Dependency: `pyserial`, only for serial/Bluetooth ports:  pip install pyserial
 (TCP and test sources need only the Python standard library.)
 
+One command does it all: this also serves the web app and opens your browser,
+so you do NOT need a separate `python -m http.server` window. Connect the app
+to "Bridge (WS)" and you are done.
+
 Examples
 --------
 List serial / Bluetooth COM ports:
     python rtk_bridge.py --list
+
+Everything in one command (relay NMEA + feed corrections + serve the app):
+    python rtk_bridge.py --source serial:COM8:115200 \
+        --ntrip ntrip://USER:PASS@CASTER_HOST:PORT/MOUNTPOINT
 
 Just relay NMEA (no corrections), Bluetooth COM port on Windows:
     python rtk_bridge.py --source serial:COM5:115200
@@ -41,7 +49,7 @@ Free community caster example (needs a base near you):
 Synthetic data to test the app end to end (no hardware):
     python rtk_bridge.py --source test
 """
-import argparse, base64, hashlib, socket, struct, sys, threading, time
+import argparse, base64, functools, hashlib, os, socket, struct, sys, threading, time, webbrowser
 
 WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -355,6 +363,27 @@ def run_tcp(spec, hub, state):
                     state.set_gga(t)
 
 
+def start_web(port):
+    """Serve the app (index.html etc.) from this script's folder, in a thread."""
+    from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+    handler = functools.partial(Quiet, directory=here)
+    try:
+        httpd = ThreadingHTTPServer(("0.0.0.0", port), handler)
+    except OSError as e:
+        print(f"[web] could not start web server on port {port} ({e}). "
+              "Is it already running in another window? The bridge still works.")
+        return False
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    print(f"[web] app at  http://localhost:{port}/index.html")
+    return True
+
+
 def find_bases(caster, lat, lon, top=15):
     """Fetch an NTRIP caster's sourcetable and list the nearest mountpoints."""
     import math
@@ -450,6 +479,12 @@ def main():
                          "(e.g. --find-bases 39.503,-105.306)")
     ap.add_argument("--caster", default="rtk2go.com:2101",
                     help="caster host:port to scan for --find-bases (default rtk2go.com:2101)")
+    ap.add_argument("--web-port", type=int, default=8000,
+                    help="serve the app on this port (default 8000)")
+    ap.add_argument("--no-web", action="store_true",
+                    help="do not serve the web app (bridge/WebSocket only)")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="do not auto-open the browser")
     args = ap.parse_args()
 
     if args.find_bases:
@@ -476,6 +511,13 @@ def main():
     threading.Thread(target=hub.start, daemon=True).start()
     time.sleep(0.3)
     state = State()
+
+    if not args.no_web:
+        if start_web(args.web_port) and not args.no_browser:
+            try:
+                webbrowser.open(f"http://localhost:{args.web_port}/index.html")
+            except Exception:
+                pass
 
     try:
         if args.source.startswith("serial:"):
