@@ -355,6 +355,58 @@ def run_tcp(spec, hub, state):
                     state.set_gga(t)
 
 
+def find_bases(caster, lat, lon, top=15):
+    """Fetch an NTRIP caster's sourcetable and list the nearest mountpoints."""
+    import math
+    host, _, port = caster.partition(":")
+    port = int(port or 2101)
+    print(f"[find] fetching sourcetable from {host}:{port} ...")
+    s = socket.create_connection((host, port), timeout=20)
+    s.sendall((f"GET / HTTP/1.1\r\nHost: {host}:{port}\r\n"
+               "Ntrip-Version: Ntrip/2.0\r\nUser-Agent: NTRIP rtk_bridge/1.0\r\n"
+               "Connection: close\r\n\r\n").encode())
+    data = b""
+    s.settimeout(20)
+    while True:
+        try:
+            chunk = s.recv(16384)
+        except socket.timeout:
+            break
+        if not chunk:
+            break
+        data += chunk
+        if len(data) > 16_000_000:
+            break
+    def hav(la1, lo1, la2, lo2):
+        p = math.pi / 180.0
+        a = (math.sin((la2 - la1) * p / 2) ** 2 +
+             math.cos(la1 * p) * math.cos(la2 * p) * math.sin((lo2 - lo1) * p / 2) ** 2)
+        return 2 * 6371.0 * math.asin(math.sqrt(a))   # km
+    rows = []
+    for line in data.decode("latin-1", "ignore").splitlines():
+        if not line.startswith("STR;"):
+            continue
+        f = line.split(";")
+        if len(f) < 11:
+            continue
+        try:
+            blat, blon = float(f[9]), float(f[10])
+        except ValueError:
+            continue
+        rows.append((hav(lat, lon, blat, blon), f[1], f[3], f[8]))
+    if not rows:
+        print("[find] no parseable mountpoints (caster may need a login to list).")
+        return
+    rows.sort(key=lambda r: r[0])
+    print(f"[find] nearest mountpoints to {lat:.5f},{lon:.5f}  (km / mountpoint / format / country):")
+    km_per_mi = 1.609344
+    for d, mp, fmt, ctry in rows[:top]:
+        flag = "  <-- great" if d <= 15 else ("  <-- usable" if d <= 35 else "")
+        print(f"  {d:7.1f} km ({d/km_per_mi:5.1f} mi)  {mp:24.24} {fmt:14.14} {ctry}{flag}")
+    print("\n[find] For a ZED-F9P rover, a base within ~15 km is ideal, up to ~35 km usable.")
+    print("[find] Use one with:  --ntrip ntrip://USER:PASS@%s/MOUNTPOINT" % caster)
+
+
 def nmea_checksum(body):
     c = 0
     for ch in body:
@@ -393,7 +445,20 @@ def main():
                     help="Optional seed GGA sentence to send to the caster before "
                          "the receiver produces one (helps VRS casters start)")
     ap.add_argument("--list", action="store_true", help="list serial ports and exit")
+    ap.add_argument("--find-bases", metavar="LAT,LON", default=None,
+                    help="list nearest NTRIP mountpoints to LAT,LON and exit "
+                         "(e.g. --find-bases 39.503,-105.306)")
+    ap.add_argument("--caster", default="rtk2go.com:2101",
+                    help="caster host:port to scan for --find-bases (default rtk2go.com:2101)")
     args = ap.parse_args()
+
+    if args.find_bases:
+        try:
+            la, lo = (float(x) for x in args.find_bases.split(","))
+        except Exception:
+            sys.exit("--find-bases expects LAT,LON e.g. 39.503,-105.306")
+        find_bases(args.caster, la, lo)
+        return
 
     if args.list:
         try:

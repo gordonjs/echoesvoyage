@@ -109,6 +109,13 @@ Pick a correction source and drop it into `--ntrip`:
   the username is your email and password is usually `none`:
   `--ntrip ntrip://you@email.com:none@rtk2go.com:2101/MountName`
 
+  Find a nearby free base first (pass your approximate lat,lon):
+  ```bash
+  python rtk_bridge.py --find-bases 39.503,-105.306
+  ```
+  It lists the closest RTK2go mountpoints by distance, flagging ones within
+  ~15 km (great) and ~35 km (usable). Scan another caster with `--caster host:port`.
+
 Notes:
 - On the SparkFun **Surveyor**, corrections are injected over **Bluetooth**, so
   pair the receiver over Bluetooth and use that COM port as the `--source`.
