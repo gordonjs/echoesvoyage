@@ -684,13 +684,34 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #map{position:absolute; inset:0; background:#0b0e13; z-index:0;}
 
   /* Top status banner */
+  #topbar{ position:absolute; top:0; left:0; right:0; z-index:500; }
   #status{
-    position:absolute; top:0; left:0; right:0; z-index:500;
     display:flex; align-items:stretch; gap:1px;
     background:rgba(15,20,25,.82); backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line);
     font-variant-numeric:tabular-nums;
   }
+  #coordbar{
+    display:flex; align-items:center; gap:14px; padding:6px 12px;
+    background:rgba(15,20,25,.82); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums;
+  }
+  #coordbar .cgrp{ display:flex; align-items:baseline; gap:6px; }
+  #coordbar .clbl{ font-size:10px; color:var(--muted); letter-spacing:.05em; }
+  #coordbar .cval{ font-size:14px; font-weight:650; }
+  #coordbar .dim{ color:var(--muted); font-size:12px; }
+  #coordbar .savebtn{
+    margin-left:auto; background:var(--accent); color:#06223f; border:none;
+    border-radius:8px; padding:7px 12px; font-weight:700; cursor:pointer; font-size:13px; white-space:nowrap;
+  }
+  #coordbar .savebtn:active{ transform:scale(.97); }
+  .savedItem{ background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; }
+  .savedItem .si-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .savedItem .si-note{ font-weight:650; font-size:14px; word-break:break-word; }
+  .savedItem .si-co{ font-size:12px; font-variant-numeric:tabular-nums; margin-top:4px; word-break:break-all; }
+  .savedItem .si-meta{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .modalcard{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px;
+    width:min(380px,90%); display:flex; flex-direction:column; gap:12px; text-align:left; }
   #inout{
     flex:0 0 auto; min-width:128px; padding:10px 16px;
     display:flex; flex-direction:column; justify-content:center; align-items:center;
@@ -806,13 +827,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <body>
   <div id="map"></div>
 
-  <div id="status">
-    <div id="inout" class="unknown"><div class="big">—</div><div class="sub">no fix</div></div>
-    <div class="stats">
-      <div class="stat"><div class="k">Fix</div><div class="v"><span id="fix" class="fixpill fix-0">No Fix</span></div></div>
-      <div class="stat"><div class="k">Sats</div><div class="v" id="sats">—</div></div>
-      <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">—</div></div>
-      <div class="stat"><div class="k">To boundary</div><div class="v" id="bdist">—</div></div>
+  <div id="topbar">
+    <div id="status">
+      <div id="inout" class="unknown"><div class="big">—</div><div class="sub">no fix</div></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Fix</div><div class="v"><span id="fix" class="fixpill fix-0">No Fix</span></div></div>
+        <div class="stat"><div class="k">Sats</div><div class="v" id="sats">—</div></div>
+        <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">—</div></div>
+        <div class="stat"><div class="k">To boundary</div><div class="v" id="bdist">—</div></div>
+      </div>
+    </div>
+    <div id="coordbar">
+      <div class="cgrp"><span class="clbl">LAT</span><span class="cval" id="ccLat">—</span></div>
+      <div class="cgrp"><span class="clbl">LON</span><span class="cval" id="ccLon">—</span></div>
+      <div class="cgrp dim" id="ccExtra"></div>
+      <button id="btnSave" class="savebtn">📍 Save point</button>
     </div>
   </div>
 
@@ -970,6 +999,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
 
       <div class="sec">
+        <div class="h">Saved points (<span id="savedCount">0</span>)</div>
+        <div id="savedList"></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn" id="btnExportCSV">Download CSV</button>
+          <button class="btn danger" id="btnClearSaved">Clear all</button>
+        </div>
+      </div>
+
+      <div class="sec">
         <div class="h">Map</div>
         <div class="seg" id="baseSeg">
           <button data-base="sat" class="active">Satellite</button>
@@ -989,6 +1027,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
 
       <div class="hint" style="text-align:center; opacity:.6;">31652 Shadow Mountain Dr, Conifer CO · APN 148669 · Jefferson County</div>
+    </div>
+  </div>
+
+  <div class="capring" id="saveModal">
+    <div class="modalcard">
+      <div style="font-weight:700; font-size:16px;">Save point</div>
+      <div class="hint" id="saveCoord" style="margin:0;"></div>
+      <input type="text" id="saveNote" placeholder="Note (e.g. NW pin, gate, big rock)" />
+      <div class="row" style="margin:0; justify-content:flex-end;">
+        <button class="btn" id="saveCancel">Cancel</button>
+        <button class="btn primary" id="saveConfirm">Save</button>
+      </div>
     </div>
   </div>
 
@@ -1233,29 +1283,50 @@ function parseNMEA(line){
    ============================================================ */
 const state={src:'serial', last:null, capturing:false, navKey:'', base:'sat'};
 const PINS={1:null,2:null};   // {corner:{key,name,e,n}, lat,lon, samples}
+let SAVED=[];                 // [{id,lat,lon,alt,acc,fix,t,note}]
 
 function fmtFt(m){ const ft=m*FT_PER_M; return ft>=1000?(ft/5280).toFixed(2)+' mi':ft.toFixed(1)+' ft'; }
 function fmtAcc(m){ if(m==null) return '—'; return m<1?(m*100).toFixed(0)+' cm':m.toFixed(2)+' m'; }
+function esc(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fixShort(q){ return q===4?'RTK':q===5?'FLOAT':q===2?'DGPS':q===1?'GPS':q==null?'—':('q'+q); }
+function geoDistBrg(lat1,lon1,lat2,lon2){
+  const R=6371000, p=Math.PI/180;
+  const dLat=(lat2-lat1)*p, dLon=(lon2-lon1)*p;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*p)*Math.cos(lat2*p)*Math.sin(dLon/2)**2;
+  const dist=2*R*Math.asin(Math.sqrt(a));
+  const y=Math.sin(dLon)*Math.cos(lat2*p);
+  const x=Math.cos(lat1*p)*Math.sin(lat2*p)-Math.sin(lat1*p)*Math.cos(lat2*p)*Math.cos(dLon);
+  return {dist, brg:(Math.atan2(y,x)/p+360)%360};
+}
 
 function onPosition(fix){
   state.last=fix;
   updateStatusBar(fix);
+  updateCoordBar(fix);
   if(CAL && polyENU){
     const enu=latLonToENU(fix.lat,fix.lon);
     const inside=pointInPoly(enu, polyENU);
     const nb=nearestBoundary(enu, polyENU);
     setInOut(inside, nb.dist, fix);
     drawPosition(fix, enu, inside, nb);
-    updateNav(enu, fix);
   }else{
     drawPosition(fix, null, null, null);
   }
+  updateNav(fix);
+}
+function updateCoordBar(fix){
+  $('ccLat').textContent=fix.lat.toFixed(7);
+  $('ccLon').textContent=fix.lon.toFixed(7);
+  const bits=[];
+  if(fix.alt!=null && isFinite(fix.alt)) bits.push(fix.alt.toFixed(1)+' m');
+  if(fix.accH!=null) bits.push('±'+fmtAcc(fix.accH));
+  $('ccExtra').textContent=bits.join('   ');
 }
 
 /* ============================================================
    5. MAP (Leaflet, inlined)
    ============================================================ */
-let map, baseSat, baseStreet, parcelLayer, cornerLayer, posMarker, accCircle,
+let map, baseSat, baseStreet, parcelLayer, cornerLayer, savedLayer, posMarker, accCircle,
     trackLine, boundaryLine, navLine, fitted=false, follow=true;
 const trackPts=[];
 
@@ -1268,6 +1339,7 @@ function initMap(){
   baseSat.addTo(map);
   parcelLayer=L.layerGroup().addTo(map);
   cornerLayer=L.layerGroup().addTo(map);
+  savedLayer=L.layerGroup().addTo(map);
   trackLine=L.polyline([],{color:'#4ea1ff',weight:2,opacity:.8}).addTo(map);
   boundaryLine=L.polyline([],{color:'#f0b429',weight:2,dashArray:'5,6'}).addTo(map);
   navLine=L.polyline([],{color:'#2ecc71',weight:3,dashArray:'2,7'}).addTo(map);
@@ -1336,27 +1408,37 @@ function setInOut(inside, distM, fix){
 }
 function rebuildNavTarget(){
   const sel=$('navTarget'); const cur=sel.value;
-  sel.innerHTML='<option value="">— none —</option>'+
-    PARCEL.corners.map(c=>`<option value="${c.key}">${c.name}</option>`).join('');
-  sel.value=cur;
+  let html='<option value="">— none —</option>';
+  html+='<optgroup label="Corners">'+
+    PARCEL.corners.map(c=>`<option value="${c.key}">${esc(c.name)}</option>`).join('')+'</optgroup>';
+  if(SAVED.length) html+='<optgroup label="Saved points">'+
+    SAVED.map(s=>`<option value="saved:${s.id}">${esc(s.note||('Point '+s.id))}</option>`).join('')+'</optgroup>';
+  sel.innerHTML=html; sel.value=cur;
 }
-function updateNav(enu, fix){
-  const nav=$('nav');
-  if(!state.navKey){ nav.style.display='none'; navLine.setLatLngs([]); return; }
+function navTargetLatLon(){
+  if(state.navKey.startsWith('saved:')){
+    const s=SAVED.find(x=>x.id===state.navKey.slice(6));
+    return s?{lat:s.lat,lon:s.lon,name:s.note||'Saved point'}:null;
+  }
+  if(!CAL) return null;                                  // corners need calibration
   const c=PARCEL.corners.find(x=>x.key===state.navKey);
-  if(!c){ nav.style.display='none'; return; }
-  const tgt=localToENU(c.e,c.n);
-  const dx=tgt.x-enu.x, dy=tgt.y-enu.y;
-  const dist=Math.hypot(dx,dy);
-  let brg=(Math.atan2(dx,dy)*R2D+360)%360;   // bearing from north
+  if(!c) return null;
+  const ll=localToLatLon(c.e,c.n);
+  return {lat:ll[0], lon:ll[1], name:c.name};
+}
+function updateNav(fix){
+  const nav=$('nav');
+  if(!state.navKey || !fix){ nav.style.display='none'; navLine.setLatLngs([]); return; }
+  const t=navTargetLatLon();
+  if(!t){ nav.style.display='none'; navLine.setLatLngs([]); return; }
+  const g=geoDistBrg(fix.lat,fix.lon,t.lat,t.lon);
   nav.style.display='block';
-  $('navName').textContent=c.name;
-  $('navDist').textContent=fmtFt(dist);
-  $('navBrg').textContent='Bearing '+brg.toFixed(0)+'°'+(fix.cog!=null?(' · heading '+fix.cog.toFixed(0)+'°'):'');
-  // arrow relative to current heading if available, else absolute bearing
-  const rel = fix.cog!=null ? (brg-fix.cog) : brg;
+  $('navName').textContent=t.name;
+  $('navDist').textContent=fmtFt(g.dist);
+  $('navBrg').textContent='Bearing '+g.brg.toFixed(0)+'°'+(fix.cog!=null?(' · heading '+fix.cog.toFixed(0)+'°'):'');
+  const rel = fix.cog!=null ? (g.brg-fix.cog) : g.brg;
   $('navArrow').style.transform='rotate('+rel+'deg)';
-  navLine.setLatLngs([[fix.lat,fix.lon], localToLatLon(c.e,c.n)]);
+  navLine.setLatLngs([[fix.lat,fix.lon],[t.lat,t.lon]]);
 }
 
 /* ============================================================
@@ -1545,11 +1627,96 @@ function clearCal(){
 }
 
 /* ============================================================
+   8b. SAVED POINTS (waypoints with notes)
+   ============================================================ */
+function openSaveModal(){
+  if(!state.last){ alert('No live position yet — connect a source first.'); return; }
+  const f=state.last;
+  $('saveNote').value='';
+  $('saveCoord').textContent=f.lat.toFixed(7)+', '+f.lon.toFixed(7)+
+    '   ('+(FIXTYPE[f.quality]||'?')+(f.accH!=null?(', ±'+fmtAcc(f.accH)):'')+')';
+  $('saveModal').style.display='flex';
+  setTimeout(()=>$('saveNote').focus(),50);
+}
+function confirmSave(){
+  const f=state.last;
+  $('saveModal').style.display='none';
+  if(!f) return;
+  SAVED.push({
+    id:String(Date.now()), lat:f.lat, lon:f.lon,
+    alt:(f.alt!=null&&isFinite(f.alt))?f.alt:null,
+    acc:(f.accH!=null)?f.accH:null, fix:f.quality, t:Date.now(),
+    note:$('saveNote').value.trim()
+  });
+  afterSavedChange();
+}
+function afterSavedChange(){ saveState(); renderSavedMarkers(); renderSavedList(); rebuildNavTarget(); }
+function renderSavedMarkers(){
+  if(!savedLayer) return;
+  savedLayer.clearLayers();
+  for(const s of SAVED){
+    L.circleMarker([s.lat,s.lon],{radius:6,color:'#fff',weight:2,fillColor:'#b06bff',fillOpacity:1})
+      .addTo(savedLayer)
+      .bindTooltip(s.note||'saved point',{direction:'top',offset:[0,-6]});
+  }
+}
+function renderSavedList(){
+  $('savedCount').textContent=SAVED.length;
+  const wrap=$('savedList');
+  if(!SAVED.length){
+    wrap.innerHTML='<div class="hint">No saved points yet. Tap <b>📍 Save point</b> (top bar) to drop one at your current position with a note.</div>';
+    return;
+  }
+  wrap.innerHTML=SAVED.slice().reverse().map(s=>`
+    <div class="savedItem">
+      <div class="si-top">
+        <div class="si-note">${esc(s.note||'(no note)')}</div>
+        <span class="pill ${s.fix===4?'ok':s.fix===5?'warn':'idle'}">${fixShort(s.fix)}</span>
+      </div>
+      <div class="si-co">${s.lat.toFixed(7)}, ${s.lon.toFixed(7)}${s.acc!=null?(' · ±'+fmtAcc(s.acc)):''}${s.alt!=null?(' · '+s.alt.toFixed(1)+' m'):''}</div>
+      <div class="si-meta">${new Date(s.t).toLocaleString()}</div>
+      <div class="row tight" style="margin-top:6px;">
+        <button class="btn" data-go="${s.id}">Go to</button>
+        <button class="btn" data-copy="${s.id}">Copy</button>
+        <button class="btn danger" data-del="${s.id}">Delete</button>
+      </div>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+    const s=SAVED.find(x=>x.id===b.dataset.go); if(!s) return;
+    follow=false; document.getElementById('btnFollow').classList.remove('on');
+    map.setView([s.lat,s.lon], Math.max(map.getZoom(),18));
+    $('panel').classList.remove('open');
+  });
+  wrap.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
+    const s=SAVED.find(x=>x.id===b.dataset.copy); if(!s) return;
+    const txt=s.lat.toFixed(7)+', '+s.lon.toFixed(7);
+    if(navigator.clipboard) navigator.clipboard.writeText(txt); else prompt('Coordinates:',txt);
+    b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1200);
+  });
+  wrap.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    if(confirm('Delete this saved point?')){ SAVED=SAVED.filter(x=>x.id!==b.dataset.del); afterSavedChange(); }
+  });
+}
+function exportSavedCSV(){
+  if(!SAVED.length){ alert('No saved points to export.'); return; }
+  const head=['note','latitude','longitude','accuracy_m','altitude_m','fix','time_iso'];
+  const lines=[head].concat(SAVED.map(s=>[
+    s.note||'', s.lat.toFixed(8), s.lon.toFixed(8),
+    s.acc!=null?s.acc.toFixed(3):'', s.alt!=null?s.alt.toFixed(2):'',
+    fixShort(s.fix), new Date(s.t).toISOString()
+  ]));
+  const csv=lines.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='saved_points.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ============================================================
    9. PERSISTENCE
    ============================================================ */
 function saveState(){
   try{
-    const d={pins:PINS, base:state.base, navKey:state.navKey,
+    const d={pins:PINS, base:state.base, navKey:state.navKey, saved:SAVED,
       cal: (CAL&&!CAL.demo)?{lat0:CAL.lat0,lon0:CAL.lon0,s:CAL.s,cos:CAL.cos,sin:CAL.sin,ang:CAL.ang,
         a1e:CAL.a1e,a1n:CAL.a1n,mLat:CAL.mLat,mLon:CAL.mLon,platDistFt:CAL.platDistFt,measDistM:CAL.measDistM,
         pin1:CAL.pin1,pin2:CAL.pin2}:null};
@@ -1559,6 +1726,7 @@ function saveState(){
 function loadState(){
   try{
     const d=JSON.parse(localStorage.getItem('parcelRTK')||'{}');
+    if(Array.isArray(d.saved)) SAVED=d.saved;
     if(d.pins){ PINS[1]=d.pins[1]||null; PINS[2]=d.pins[2]||null; refreshPinUI(1); refreshPinUI(2); }
     if(d.base){ state.base=d.base; document.querySelectorAll('#baseSeg button').forEach(b=>b.classList.toggle('active',b.dataset.base===d.base)); }
     if(d.cal){
@@ -1629,13 +1797,22 @@ function initUI(){
   $('btnApplyCal').onclick=doApplyCal;
   $('btnClearCal').onclick=clearCal;
 
-  $('navTarget').onchange=e=>{ state.navKey=e.target.value; saveState(); if(state.last && CAL) updateNav(latLonToENU(state.last.lat,state.last.lon), state.last); else if(!state.navKey){$('nav').style.display='none'; navLine.setLatLngs([]);} };
+  $('navTarget').onchange=e=>{ state.navKey=e.target.value; saveState(); updateNav(state.last); };
 
   $('btnFollow').onclick=()=>{ follow=!follow; $('btnFollow').classList.toggle('on',follow); if(follow&&state.last) map.panTo([state.last.lat,state.last.lon]); };
   $('btnZoomIn').onclick=()=>map.zoomIn();
   $('btnZoomOut').onclick=()=>map.zoomOut();
   $('btnClearTrack').onclick=()=>{ trackPts.length=0; trackLine.setLatLngs([]); };
   $('btnClearLog').onclick=()=>$('log').textContent='';
+
+  // saved points
+  $('btnSave').onclick=openSaveModal;
+  $('saveConfirm').onclick=confirmSave;
+  $('saveCancel').onclick=()=>$('saveModal').style.display='none';
+  $('saveNote').addEventListener('keydown',e=>{ if(e.key==='Enter') confirmSave(); if(e.key==='Escape') $('saveModal').style.display='none'; });
+  $('btnExportCSV').onclick=exportSavedCSV;
+  $('btnClearSaved').onclick=()=>{ if(SAVED.length && confirm('Delete ALL saved points?')){ SAVED=[]; afterSavedChange(); } };
+
   $('btnFollow').classList.add('on');
 }
 
@@ -1643,7 +1820,11 @@ window.addEventListener('load',()=>{
   initMap();
   initUI();
   loadState();
-  if(CAL){ rebuildParcelLayers(); rebuildNavTarget(); $('navTarget').value=state.navKey||''; }
+  if(CAL){ rebuildParcelLayers(); }
+  renderSavedMarkers();
+  renderSavedList();
+  rebuildNavTarget();
+  $('navTarget').value=state.navKey||'';
 });
 </script>
 </body>

@@ -194,6 +194,14 @@ each visit (as long as you use the same browser and don't clear site data).
 - **Basemap**: Satellite (Esri), Streets (OSM), or None. Satellite/Streets need
   internet — **load the map over Wi-Fi before you head out** if the property has
   no signal; the parcel outline always draws regardless.
+- **Live coordinates**: the bar under the status shows your current lat/long
+  (7 decimals ≈ cm), elevation, and accuracy.
+- **Saved points**: tap **📍 Save point** to drop a waypoint at your current
+  position with a **note** (e.g. "NW pin, yellow cap"). Recall them under
+  **Setup → Saved points** — each shows its coordinates, accuracy, fix type and
+  time, with **Go to** (recenter), **Copy**, **Delete**, and **Download CSV**.
+  Saved points also appear in the **Navigate** list, so you can walk back to one
+  with a live bearing/distance even before the parcel is calibrated.
 - **Track** breadcrumb and a raw **NMEA log** for troubleshooting.
 
 ---
