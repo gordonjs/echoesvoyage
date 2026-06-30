@@ -1062,38 +1062,52 @@ const D2R=Math.PI/180, R2D=180/Math.PI, FT_PER_M=3.280839895, M_PER_FT=0.3048;
 const dms=(d,m,s)=>d+m/60+s/3600;
 
 /* ============================================================
-   1. PARCEL GEOMETRY  (metes & bounds from recorded legal description)
-   Local plane: E (east) = +x feet, N (north) = +y feet, origin = True Point of Beginning.
+   1. PARCEL GEOMETRY  (metes & bounds from recorded legal descriptions)
+   ONE shared local plane: E=+x ft, N=+y ft. Origin (0,0) is the common
+   corner — parcel 1's True Point of Beginning == Lodgepole Lot 1's NW corner.
+   Both deeds tie to the same Section 5 grid, so a single two-pin calibration
+   georeferences both parcels at once.
    ============================================================ */
-const COURSES=[
-  {t:'L', az:dms(10,27,3),         d:960.00,  mark:'NW'},                              // N10°27'03"E
-  {t:'L', az:180-dms(69,12,32),    d:1958.92, mark:'NE'},                              // S69°12'32"E to county road
-  {t:'C', tin:(180+dms(43,21,43))+dms(20,34,0)/2, delta:dms(20,34,0), R:415.82, dir:'L'},
-  {t:'L', az:180+dms(33,4,43),     d:38.97},
-  {t:'C', tin:180+dms(33,4,43),    delta:dms(16,4,50), R:340.57, dir:'L'},
-  {t:'L', az:180+dms(16,59,53),    d:93.91},
-  {t:'C', tin:180+dms(16,59,53),   delta:dms(12,4,0),  R:408.46, dir:'L'},
-  {t:'L', az:180+dms(4,55,53),     d:24.74},
-  {t:'C', tin:180+dms(4,55,53),    delta:dms(14,59,0), R:464.28, dir:'R'},
-  {t:'L', az:180+dms(19,54,53),    d:122.26, mark:'S'},                                // S19°54'53"W
-  {t:'L', az:360-dms(76,34,50),    d:1775.90, mark:'TPB'}                              // N76°34'50"W back to TPB
+const PARCEL_DEFS=[
+  { id:'p1', name:'31652 Shadow Mountain Dr — 35.0 ac (APN 148669)',
+    short:'Shadow Mtn 35 ac', color:'#f85149', start:[0,0], startMark:'TPB',
+    cornerNames:{TPB:'P1 · TPB / SW corner', NW:'P1 · NW corner', NE:'P1 · NE corner (road)', S:'P1 · S corner (road)'},
+    courses:[
+      {t:'L', az:dms(10,27,3),         d:960.00,  mark:'NW'},
+      {t:'L', az:180-dms(69,12,32),    d:1958.92, mark:'NE'},
+      {t:'C', tin:(180+dms(43,21,43))+dms(20,34,0)/2, delta:dms(20,34,0), R:415.82, dir:'L'},
+      {t:'L', az:180+dms(33,4,43),     d:38.97},
+      {t:'C', tin:180+dms(33,4,43),    delta:dms(16,4,50), R:340.57, dir:'L'},
+      {t:'L', az:180+dms(16,59,53),    d:93.91},
+      {t:'C', tin:180+dms(16,59,53),   delta:dms(12,4,0),  R:408.46, dir:'L'},
+      {t:'L', az:180+dms(4,55,53),     d:24.74},
+      {t:'C', tin:180+dms(4,55,53),    delta:dms(14,59,0), R:464.28, dir:'R'},
+      {t:'L', az:180+dms(19,54,53),    d:122.26, mark:'S'},
+      {t:'L', az:360-dms(76,34,50),    d:1775.90, mark:'TPB'}
+    ] },
+  { id:'p2', name:'Lodgepole Pines Lot 1 — 14.6 ac', short:'Lodgepole Lot 1',
+    color:'#4ea1ff', start:[0,0], startMark:'NW',
+    cornerNames:{NW:'Lot1 · NW (shared corner)', NE:'Lot1 · NE corner', SE:'Lot1 · SE corner', SW:'Lot1 · SW corner'},
+    courses:[
+      {t:'L', az:180-dms(76,36,49), d:641.00,  mark:'NE'},   // N line  S76°36'49"E (shared boundary)
+      {t:'L', az:180+dms(10,35,1),  d:946.69,  mark:'SE'},   // E line  S10°35'01"W (Lot 1/2 line)
+      {t:'L', az:360-dms(84,58,14), d:641.00,  mark:'SW'},   // S line  N84°58'14"W (basis of bearing)
+      {t:'L', az:dms(10,27,36),     d:1040.08, mark:'NW'}    // W line  N10°27'36"E back to NW
+    ] }
 ];
-const CORNER_LABELS={
-  TPB:'True Point of Beginning (SW)',
-  NW :'NW corner',
-  NE :'NE corner (at county road)',
-  S  :'S corner (at county road)'
-};
-
-function buildParcel(){
-  let e=0,n=0;
-  const poly=[{e:0,n:0}];
-  const corners=[{key:'TPB', name:CORNER_LABELS.TPB, e:0, n:0}];
-  for(const c of COURSES){
+function buildParcel(def){
+  let e=def.start[0], n=def.start[1];
+  const poly=[{e,n}];
+  const corners=[];
+  const addCorner=(mark)=>{ if(!mark || !def.cornerNames[mark]) return;
+    const key=def.id+':'+mark;
+    if(!corners.some(x=>x.key===key))
+      corners.push({key, mark, name:def.cornerNames[mark], parcel:def.id, e, n}); };
+  if(def.startMark) addCorner(def.startMark);
+  for(const c of def.courses){
     if(c.t==='L'){
       e+=c.d*Math.sin(c.az*D2R); n+=c.d*Math.cos(c.az*D2R);
-      poly.push({e,n});
-      if(c.mark && c.mark!=='TPB') corners.push({key:c.mark, name:CORNER_LABELS[c.mark], e, n});
+      poly.push({e,n}); if(c.mark) addCorner(c.mark);
     }else{
       const left=c.dir==='L';
       const radAz=c.tin+(left?-90:90);
@@ -1103,29 +1117,27 @@ function buildParcel(){
       const steps=Math.max(3, Math.round(Math.abs(c.delta)*D2R*c.R/8));
       for(let i=1;i<=steps;i++){
         const a=a0+sweep*i/steps;
-        e=ce+c.R*Math.cos(a); n=cn+c.R*Math.sin(a);
-        poly.push({e,n});
+        e=ce+c.R*Math.cos(a); n=cn+c.R*Math.sin(a); poly.push({e,n});
+        if(i===steps) addCorner(c.mark);
       }
     }
   }
-  // shoelace area + perimeter (chord polygon)
   let A=0,per=0;
-  for(let i=0;i<poly.length-1;i++){
-    const p=poly[i],q=poly[i+1];
-    A+=p.e*q.n-q.e*p.n; per+=Math.hypot(q.e-p.e,q.n-p.n);
-  }
-  return {poly, corners, area:Math.abs(A)/2, perim:per,
-          misclose:Math.hypot(poly[poly.length-1].e, poly[poly.length-1].n)};
+  for(let i=0;i<poly.length-1;i++){ const p=poly[i],q=poly[i+1]; A+=p.e*q.n-q.e*p.n; per+=Math.hypot(q.e-p.e,q.n-p.n); }
+  return {id:def.id, name:def.name, short:def.short, color:def.color, poly, corners,
+          area:Math.abs(A)/2, perim:per,
+          misclose:Math.hypot(poly[poly.length-1].e-def.start[0], poly[poly.length-1].n-def.start[1])};
 }
-const PARCEL=buildParcel();
+const PARCELS=PARCEL_DEFS.map(buildParcel);
+function allCorners(){ return PARCELS.flatMap(p=>p.corners); }
+function cornerByKey(k){ return allCorners().find(c=>c.key===k); }
 
 /* ============================================================
    2. CALIBRATION & COORDINATE TRANSFORMS
    Similarity transform local(ft) -> ENU(m) from two pin correspondences.
    ============================================================ */
 let CAL=null;            // {lat0,lon0,mLat,mLon,s,cos,sin,ang,a1e,a1n,platDistFt,measDistM,pin1,pin2}
-let polyLatLon=null;     // parcel as [lat,lon] for the map
-let polyENU=null;        // parcel as {x,y} meters for geometry
+                         // each PARCELS[i] gets .polyENU ({x,y} m) and .polyLatLon ([lat,lon]) after calibration
 
 function metersPerDeg(lat){
   const f=lat*D2R;
@@ -1162,10 +1174,15 @@ function latLonToENU(lat,lon){
 function enuToLatLon(x,y){
   return [CAL.lat0+y/CAL.mLat, CAL.lon0+x/CAL.mLon];
 }
+function buildParcelGeo(){
+  for(const P of PARCELS){
+    P.polyENU=P.poly.map(p=>localToENU(p.e,p.n));
+    P.polyLatLon=P.poly.map(p=>localToLatLon(p.e,p.n));
+  }
+}
 function applyCalibration(cal){
   CAL=cal;
-  polyENU=PARCEL.poly.map(p=>localToENU(p.e,p.n));
-  polyLatLon=PARCEL.poly.map(p=>localToLatLon(p.e,p.n));
+  buildParcelGeo();
   rebuildParcelLayers();
   rebuildNavTarget();
   showCalInfo();
@@ -1175,17 +1192,19 @@ function applyCalibration(cal){
 
 /* ---- rough placement: build a provisional calibration from one anchor + rotation ---- */
 function polyCentroidLocal(){
-  const p=PARCEL.poly; let A=0,cx=0,cy=0;
-  for(let i=0;i<p.length-1;i++){
-    const cr=p[i].e*p[i+1].n-p[i+1].e*p[i].n;
-    A+=cr; cx+=(p[i].e+p[i+1].e)*cr; cy+=(p[i].n+p[i+1].n)*cr;
+  let A=0,cx=0,cy=0;
+  for(const P of PARCELS){ const p=P.poly;
+    for(let i=0;i<p.length-1;i++){
+      const cr=p[i].e*p[i+1].n-p[i+1].e*p[i].n;
+      A+=cr; cx+=(p[i].e+p[i+1].e)*cr; cy+=(p[i].n+p[i+1].n)*cr;
+    }
   }
   A*=0.5; return {e:cx/(6*A), n:cy/(6*A)};
 }
 function roughRefLocal(){
   const v=$('roughRef').value;
   if(v==='center') return polyCentroidLocal();
-  const c=PARCEL.corners.find(x=>x.key===v); return {e:c.e, n:c.n};
+  const c=cornerByKey(v); return c?{e:c.e, n:c.n}:polyCentroidLocal();
 }
 function buildRoughCal(ref, lat, lon, rotDeg){
   const {mLat,mLon}=metersPerDeg(lat);
@@ -1303,12 +1322,18 @@ function onPosition(fix){
   state.last=fix;
   updateStatusBar(fix);
   updateCoordBar(fix);
-  if(CAL && polyENU){
+  if(CAL && PARCELS[0].polyENU){
     const enu=latLonToENU(fix.lat,fix.lon);
-    const inside=pointInPoly(enu, polyENU);
-    const nb=nearestBoundary(enu, polyENU);
-    setInOut(inside, nb.dist, fix);
-    drawPosition(fix, enu, inside, nb);
+    let insideP=null, nearest=null;
+    for(const P of PARCELS){
+      if(pointInPoly(enu, P.polyENU)) insideP=P;
+      const nb=nearestBoundary(enu, P.polyENU);
+      if(!nearest || nb.dist<nearest.dist){ nearest={dist:nb.dist, point:nb.point, parcel:P}; }
+    }
+    let nb=nearest;
+    if(insideP){ const b=nearestBoundary(enu, insideP.polyENU); nb={dist:b.dist, point:b.point, parcel:insideP}; }
+    setInOut(insideP, nb.dist, nb.parcel);
+    drawPosition(fix, enu, !!insideP, nb);
   }else{
     drawPosition(fix, null, null, null);
   }
@@ -1354,12 +1379,17 @@ function setBase(b){
 }
 function rebuildParcelLayers(){
   parcelLayer.clearLayers(); cornerLayer.clearLayers();
-  if(!polyLatLon) return;
-  L.polygon(polyLatLon,{color:'#f85149',weight:2.5,fillColor:'#f85149',fillOpacity:.07}).addTo(parcelLayer);
-  for(const c of PARCEL.corners){
-    const ll=localToLatLon(c.e,c.n);
-    L.circleMarker(ll,{radius:5,color:'#fff',weight:2,fillColor:'#f0b429',fillOpacity:1}).addTo(cornerLayer)
-      .bindTooltip(c.name,{direction:'top',offset:[0,-6]});
+  if(!CAL || !PARCELS[0].polyLatLon) return;
+  const allLL=[];
+  for(const P of PARCELS){
+    L.polygon(P.polyLatLon,{color:P.color,weight:2.5,fillColor:P.color,fillOpacity:.07}).addTo(parcelLayer)
+      .bindTooltip(P.name,{sticky:true});
+    for(const c of P.corners){
+      const ll=localToLatLon(c.e,c.n);
+      L.circleMarker(ll,{radius:5,color:'#fff',weight:2,fillColor:'#f0b429',fillOpacity:1}).addTo(cornerLayer)
+        .bindTooltip(c.name,{direction:'top',offset:[0,-6]});
+    }
+    P.polyLatLon.forEach(ll=>allLL.push(ll));
   }
   // calibration pins
   for(const k of [1,2]){
@@ -1369,7 +1399,7 @@ function rebuildParcelLayers(){
         .bindTooltip('Pin '+k,{permanent:true,direction:'right',offset:[8,0],className:'pintip'});
     }
   }
-  if(!fitted){ map.fitBounds(L.polygon(polyLatLon).getBounds().pad(0.15)); fitted=true; }
+  if(!fitted && allLL.length){ map.fitBounds(L.latLngBounds(allLL).pad(0.12)); fitted=true; }
 }
 function drawPosition(fix, enu, inside, nb){
   const ll=[fix.lat,fix.lon];
@@ -1399,18 +1429,20 @@ function updateStatusBar(fix){
   $('sats').textContent = fix.sats!=null?fix.sats:'—';
   $('acc').textContent = fmtAcc(fix.accH);
 }
-function setInOut(inside, distM, fix){
+function setInOut(insideP, distM, parcel){
   const el=$('inout');
-  el.className=inside?'in':'out';
-  el.querySelector('.big').textContent=inside?'IN':'OUT';
-  el.querySelector('.sub').textContent=inside?'inside parcel':'outside parcel';
+  el.className=insideP?'in':'out';
+  el.querySelector('.big').textContent=insideP?'IN':'OUT';
+  el.querySelector('.sub').textContent=insideP?insideP.short:('nearest: '+(parcel?parcel.short:'—'));
   $('bdist').textContent=fmtFt(distM);
 }
 function rebuildNavTarget(){
   const sel=$('navTarget'); const cur=sel.value;
   let html='<option value="">— none —</option>';
-  html+='<optgroup label="Corners">'+
-    PARCEL.corners.map(c=>`<option value="${c.key}">${esc(c.name)}</option>`).join('')+'</optgroup>';
+  for(const P of PARCELS){
+    html+='<optgroup label="'+esc(P.short)+'">'+
+      P.corners.map(c=>`<option value="corner:${c.key}">${esc(c.name)}</option>`).join('')+'</optgroup>';
+  }
   if(SAVED.length) html+='<optgroup label="Saved points">'+
     SAVED.map(s=>`<option value="saved:${s.id}">${esc(s.note||('Point '+s.id))}</option>`).join('')+'</optgroup>';
   sel.innerHTML=html; sel.value=cur;
@@ -1420,11 +1452,14 @@ function navTargetLatLon(){
     const s=SAVED.find(x=>x.id===state.navKey.slice(6));
     return s?{lat:s.lat,lon:s.lon,name:s.note||'Saved point'}:null;
   }
-  if(!CAL) return null;                                  // corners need calibration
-  const c=PARCEL.corners.find(x=>x.key===state.navKey);
-  if(!c) return null;
-  const ll=localToLatLon(c.e,c.n);
-  return {lat:ll[0], lon:ll[1], name:c.name};
+  if(state.navKey.startsWith('corner:')){
+    if(!CAL) return null;                                // corners need calibration
+    const c=cornerByKey(state.navKey.slice(7));
+    if(!c) return null;
+    const ll=localToLatLon(c.e,c.n);
+    return {lat:ll[0], lon:ll[1], name:c.name};
+  }
+  return null;
 }
 function updateNav(fix){
   const nav=$('nav');
@@ -1513,12 +1548,11 @@ function startDemo(){
   const {mLat,mLon}=metersPerDeg(39.4970);
   const demoCal={lat0:39.4970,lon0:-105.3050,mLat,mLon,s:M_PER_FT,cos:1,sin:0,ang:0,
     a1e:0,a1n:0,platDistFt:0,measDistM:0,demo:true};
-  CAL=demoCal; polyENU=PARCEL.poly.map(p=>localToENU(p.e,p.n));
-  polyLatLon=PARCEL.poly.map(p=>localToLatLon(p.e,p.n));
+  CAL=demoCal; buildParcelGeo();
   rebuildParcelLayers(); rebuildNavTarget();
   setConn('demo running','warn'); follow=true; $('btnFollow').classList.add('on');
-  // walk: a path in local feet that crosses the boundary near the NW area
-  const wp=[{e:300,n:600},{e:300,n:980},{e:300,n:1100},{e:700,n:1100},{e:900,n:850},{e:600,n:500},{e:300,n:600}];
+  // walk: a path in local feet that crosses between the two parcels near the shared corner
+  const wp=[{e:300,n:600},{e:300,n:980},{e:120,n:-300},{e:300,n:-700},{e:-100,n:-600},{e:200,n:200},{e:300,n:600}];
   let seg=0,t=0;
   if(demoTimer) clearInterval(demoTimer);
   demoTimer=setInterval(()=>{
@@ -1543,11 +1577,11 @@ function setManual(){
    ============================================================ */
 let capState=null;
 function cornerOptions(){
-  return PARCEL.corners.map(c=>`<option value="${c.key}">${c.name} (E ${c.e.toFixed(1)}, N ${c.n.toFixed(1)} ft)</option>`).join('');
+  return PARCELS.map(P=>'<optgroup label="'+esc(P.short)+'">'+
+    P.corners.map(c=>`<option value="${c.key}">${esc(c.name)}</option>`).join('')+'</optgroup>').join('');
 }
 function selectedCorner(which){
-  const key=$('pin'+which+'corner').value;
-  return PARCEL.corners.find(c=>c.key===key);
+  return cornerByKey($('pin'+which+'corner').value);
 }
 function startCapture(which){
   if(!state.last){ alert('No live position yet — connect a source first.'); return; }
@@ -1590,7 +1624,10 @@ function refreshPinUI(which){
 }
 function doApplyCal(){
   if(!PINS[1]||!PINS[2]){ alert('Capture both pins first.'); return; }
-  if(PINS[1].corner.key===PINS[2].corner.key){ alert('Pin 1 and Pin 2 must be different corners.'); return; }
+  const a=PINS[1].corner, b=PINS[2].corner;
+  if(Math.hypot(a.e-b.e, a.n-b.n)<1){
+    alert('Pin 1 and Pin 2 are the same physical corner (e.g. the shared corner) — pick two different corners that are far apart.'); return;
+  }
   applyCalibration(computeCal(PINS[1],PINS[2]));
 }
 function showCalInfo(){
@@ -1617,7 +1654,9 @@ function showCalInfo(){
     `<div class="hint" style="margin-top:6px;">Scale error compares your two measured pins to the recorded plat distance — under ±0.3% is excellent. Large values usually mean a wrong corner pick or a non-fixed solution.</div>`;
 }
 function clearCal(){
-  CAL=null; polyENU=null; polyLatLon=null; PINS[1]=PINS[2]=null;
+  CAL=null;
+  for(const P of PARCELS){ P.polyENU=null; P.polyLatLon=null; }
+  PINS[1]=PINS[2]=null;
   refreshPinUI(1); refreshPinUI(2);
   parcelLayer.clearLayers(); cornerLayer.clearLayers();
   $('calInfo').style.display='none';
@@ -1730,8 +1769,7 @@ function loadState(){
     if(d.pins){ PINS[1]=d.pins[1]||null; PINS[2]=d.pins[2]||null; refreshPinUI(1); refreshPinUI(2); }
     if(d.base){ state.base=d.base; document.querySelectorAll('#baseSeg button').forEach(b=>b.classList.toggle('active',b.dataset.base===d.base)); }
     if(d.cal){
-      CAL=d.cal; polyENU=PARCEL.poly.map(p=>localToENU(p.e,p.n));
-      polyLatLon=PARCEL.poly.map(p=>localToLatLon(p.e,p.n));
+      CAL=d.cal; buildParcelGeo();
       showCalInfo();
     }
     if(d.navKey) state.navKey=d.navKey;
@@ -1742,19 +1780,18 @@ function loadState(){
    10. WIRE UP UI
    ============================================================ */
 function initUI(){
-  // parcel info
+  // parcel info (both parcels)
   $('parcelInfo').innerHTML=
-    `<div><span class="k">Area</span><span class="v">${(PARCEL.area/43560).toFixed(2)} ac</span></div>`+
-    `<div><span class="k">Perimeter</span><span class="v">${PARCEL.perim.toFixed(0)} ft</span></div>`+
-    `<div><span class="k">Corners</span><span class="v">${PARCEL.corners.length} named</span></div>`+
-    `<div><span class="k">Deed misclosure</span><span class="v">${PARCEL.misclose.toFixed(2)} ft</span></div>`;
+    PARCELS.map(P=>`<div><span class="k" style="color:${P.color}">■</span> <span class="k">${esc(P.short)}</span><span class="v">${(P.area/43560).toFixed(2)} ac</span></div>`).join('')+
+    `<div class="hint" style="margin-top:6px;">Both share a corner and the Section 5 grid, so <b>one two-pin calibration places both</b>. Deed misclosure: P1 ${PARCELS[0].misclose.toFixed(1)} ft, Lot 1 ${PARCELS[1].misclose.toFixed(2)} ft.</div>`;
 
   $('pin1corner').innerHTML=cornerOptions();
   $('pin2corner').innerHTML=cornerOptions();
-  if($('pin2corner').options.length>1) $('pin2corner').selectedIndex=1;
+  // default the two pins to far-apart corners of parcel 1
+  $('pin1corner').value='p1:NW'; $('pin2corner').value='p1:S';
 
   $('roughRef').innerHTML='<option value="center">Property center</option>'+
-    PARCEL.corners.map(c=>`<option value="${c.key}">${c.name}</option>`).join('');
+    allCorners().map(c=>`<option value="${c.key}">${esc(c.name)}</option>`).join('');
 
   $('serialSupport').textContent = ('serial' in navigator)?'Web Serial: available ✓':'Web Serial: NOT available in this browser/context.';
 

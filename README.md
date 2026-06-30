@@ -208,12 +208,21 @@ each visit (as long as you use the same browser and don't clear site data).
 
 ## How the boundary is computed
 
-`index.html` builds the polygon from the deed in `COURSES` (see the
-*PARCEL GEOMETRY* section). Lines use quadrant bearings → azimuths; the four
-right-of-way curves are densified from their radius, delta, and tangent
-direction. The traverse closes to **2.25 ft** over a **5,425 ft** perimeter and
-yields **~35.0 acres**, confirming the parsing. If you ever need to correct a
-call, edit the `COURSES` array — it's plain, readable data.
+`index.html` builds each polygon from its deed in `PARCEL_DEFS` (see the
+*PARCEL GEOMETRY* section). Lines use quadrant bearings → azimuths; curves are
+densified from their radius, delta, and tangent direction. If you ever need to
+correct a call, edit `PARCEL_DEFS` — it's plain, readable data.
+
+**Two parcels, one calibration.** The app carries both:
+- **31652 Shadow Mountain Dr** — ~35.0 ac (closes to 2.25 ft over 5,425 ft).
+- **Lodgepole Pines Lot 1** — ~14.58 ac (closes to 0.00 ft; plat says 14.57).
+
+Both deeds tie to the same Section 5 grid and **share a corner** (parcel 1's
+True Point of Beginning is Lot 1's NW corner), so they're built in one shared
+local coordinate frame. That means a **single two-pin calibration places both**
+— you don't calibrate twice. The status banner names which parcel you're in
+("IN — Shadow Mtn 35 ac" / "IN — Lodgepole Lot 1") or "OUT" with the nearest
+parcel and distance to its line.
 
 ## Files
 - `index.html` — the whole app (Leaflet embedded; works offline).
