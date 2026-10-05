@@ -1,0 +1,5 @@
+work/
+__pycache__/
+*.pyc
+output/*.mbtiles
+output/*.mbtiles-journal
