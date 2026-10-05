@@ -1,0 +1,12 @@
+# your settings, including the NTRIP password: stays on this computer
+rtk_config.json
+rtk_config.json.bad
+start_rtk.bat
+# your project, map-tile cache and logs
+rtk_data/
+# build / tool clutter
+__pycache__/
+*.pyc
+node_modules/
+*.new
+.tmp-*

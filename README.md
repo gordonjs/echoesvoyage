@@ -1,230 +1,169 @@
-# Parcel RTK — 31652 Shadow Mountain Drive, Conifer CO
+# Parcel RTK
 
-A single-page app that takes **live data from your SparkFun RTK surveyor**, shows
-your position on a map, and tells you in real time whether you are **inside or
-outside your parcel** (APN 148669, Jefferson County, ~35 acres). The parcel
-boundary is built from the recorded legal description (metes & bounds, including
-the four curves along the county road). You georeference it to the real world by
-standing on **two known corners** — the two-pin calibration.
+Walk your land with a SparkFun RTK Surveyor and see, live and to the inch, whether you are
+**IN** or **OUT** of your property, and how far you are from the line.
 
-Everything runs in the browser. Leaflet is embedded in `index.html`, so the
-parcel outline and the in/out logic work **fully offline** — only the
-satellite/street basemap tiles need internet.
+It covers both of your parcels in Conifer, CO:
 
----
+- **31652 Shadow Mountain Dr**, the 35-acre tract from the Exhibit "A" legal description.
+- **Lodgepole Pines Lot 1** (14.57 ac), from the recorded plat (Rec. F0236484, 1996).
 
-## Quick start (Windows laptop — the easy path)
+The two share a corner (one rebar marks both), so a single calibration places them both.
 
-1. Copy this folder to the laptop. Make sure Python is installed
-   (<https://www.python.org/>, tick *Add Python to PATH*).
-2. Double-click **`serve.bat`**. It serves the app at
-   `http://localhost:8000/index.html` and opens it in your default browser.
-   Use **Chrome or Edge** (needed for USB/Web Serial).
-3. Connect your receiver (see *Connecting your receiver* below).
-4. Calibrate with two pins (see *Two-pin calibration*).
-5. Walk the property — the banner shows **IN / OUT** and distance to the
-   nearest boundary.
-
-> **Why serve over localhost instead of opening the file?** Browsers only allow
-> the USB/Web Serial API on a "secure context" (`https` or `localhost`).
-> `serve.bat` provides that. Demo and Manual modes work from a plain file too.
-
-### Android tablet
-Chrome for Android supports USB (Web Serial) over a USB-OTG cable, but it still
-needs a localhost server. The simplest reliable setup is the Windows laptop. If
-you want the tablet, install **Termux**, run `bash serve.sh`, and open
-`http://localhost:8000/index.html` in Chrome — or use the **Bridge** mode below
-over Wi-Fi.
+> Field tool, not a boundary survey. For anything legal (a fence dispute, a sale, building
+> close to a line) hire a licensed surveyor. This app shows you where the documents and
+> your monuments put the lines. That is very good orientation, but it is not a survey.
 
 ---
 
-## Connecting your receiver
+## Install or update (Windows laptop)
 
-Open **⚙ Setup → Data source** and pick one:
+1. **Python 3** from python.org (tick *Add Python to PATH*), then in PowerShell:
+   `pip install pyserial`
+2. **Download** the latest ZIP:
+   <https://github.com/gordonjs/echoesvoyage/archive/refs/heads/claude/rtk-surveyor-map-app-qb9n84.zip>
+   and extract it **over your existing Parcel RTK folder**, so that `rtk_bridge.py` and the
+   `web` folder sit next to each other. Your `start_rtk.bat` is not in the ZIP and is not
+   touched.
+3. **Start it**: double-click your `start_rtk.bat` once. Its receiver and correction
+   settings are saved to `rtk_config.json` on that first run. From then on all you need is
+   `python rtk_bridge.py`.
+4. **Desktop launcher** (optional): `python rtk_bridge.py --install` puts *Parcel RTK* on
+   your desktop.
 
-| Mode | Use when | Notes |
-|------|----------|-------|
-| **USB Serial** | Receiver is plugged into the laptop's USB and presents NMEA on a COM port | Click *Connect USB*, pick the port, set the baud (SparkFun default is often **38400**; try 115200 if blank). Chrome/Edge only. |
-| **Bridge (WS)** | **Bluetooth** or **TCP/Wi-Fi** NMEA | Run `rtk_bridge.py` (below), then connect to `ws://localhost:8765`. This is the most reliable path for Bluetooth. |
-| **Demo** | No hardware — see how it behaves | Simulates a walk across the boundary with a temporary calibration. |
-| **Manual** | Testing a specific coordinate | Type a lat/lon. |
+Later updates come from inside the app: **Menu → Settings → Updates → Install update**.
+Your settings, calibration and saved points are never overwritten.
 
-The status bar shows fix type (**RTK FIX** / **RTK FLOAT** / DGPS / GPS),
-satellite count, and horizontal accuracy (from `GST` if your receiver sends it,
-otherwise estimated from HDOP). **Calibrate and stake with an RTK *Fixed*
-solution** for centimetre accuracy.
+**Coming from the first version?** The first time the new app opens, it imports your old
+hand placement and saved points from the browser and shows a message saying so. If the old
+screen still appears, press **Ctrl+F5**.
 
-### Bluetooth / TCP via the bridge
+One black window does everything. It talks to the receiver over Bluetooth, feeds it RTK
+corrections over the laptop's internet (Starlink), serves the app, and keeps your project in
+`rtk_data\project.json`. Closing that window stops everything.
 
-The SparkFun RTK streams NMEA over Bluetooth and (optionally) TCP, neither of
-which a browser can read directly. `rtk_bridge.py` relays it over a WebSocket.
+## First time out
 
-```bash
-pip install pyserial          # only needed for serial/Bluetooth COM ports
+1. **Receiver.** Pair the Surveyor in Windows Bluetooth settings, with the receiver's
+   Bluetooth set to *Classic*. Windows creates two COM ports, and the bridge finds the
+   right one (the *outgoing* one) by itself.
+2. **Corrections.** Open **Menu → Settings → Corrections**, choose *u-blox PointPerfect
+   (NEAR-RTCM)*, and enter your username and password. *Status* should say **Streaming**,
+   and the Fix pill goes FLOAT → **RTK FIX** within a minute or two of open sky.
+3. **Put the outline on the map.** If you used the first version, your placement comes over
+   automatically. Otherwise use **Calibrate → Place the outline here**: drag ✥ to move it,
+   drag ⟳ to turn it, until it sits on the satellite photo. That gets you within about
+   10 ft.
+4. **Lock it to the ground with monuments.** Measure the two monuments that appear on both
+   documents first:
+   - **TPB**: the shared corner.
+   - **LPNE**: the road corner, 1,776 ft away.
 
-# List serial / Bluetooth COM ports:
-python rtk_bridge.py --list
+   To measure one:
+   - Tap **Go**. An arrow and the distance lead you to it, and when you're close it tells
+     you what to look for.
+   - Set the pole on it with **RTK FIX** and tap **Measure**. It averages the position and
+     finishes on its own once the readings are steady.
+   - After the second monument it compares the distance you measured with the documents.
+     A few hundredths of a foot means you found the right pins.
+5. **Add a third as a check**: either the Lot 1 SW aluminum cap (W16) or the section-corner
+   brass plate (S14). With three or more, the app shows which monument disagrees, if one
+   does.
 
-# Bluetooth or USB COM port (Windows): pair the receiver first, note its
-# "outgoing" COM port in Bluetooth settings, then:
-python rtk_bridge.py --source serial:COM5:38400
+## Reading the screen
 
-# TCP NMEA server (receiver's IP/port, from the RTK firmware's TCP settings):
-python rtk_bridge.py --source tcp:192.168.4.1:2948
+| What you see | Meaning |
+|---|---|
+| **IN** (green) | Inside one of your parcels; the line below says which. |
+| **OUT** (red) | Outside; it names the neighbor's lot if you're in one. |
+| **ON LINE** (amber) | Too close to the line to call, given the combined uncertainty of your fix and the outline. It also says which side you're *likely* on. |
+| `23.41 ft to line · West line` | Distance to **your property line**, meaning the outer edge of everything you own. The arrow points to it. The line between your two parcels doesn't count, because you own both sides. |
+| Fix / Accuracy / Sats / Corr. age | Receiver state. Accuracy comes from the receiver's GST message (marked `~` when estimated). |
+| 📍 **Save** | Saves the spot with a note; you can average it for 10 s first. Your saved points are listed under **Menu → Points**, with CSV, KML (Google Earth) and GeoJSON export. |
 
-# Synthetic data to test the app end-to-end (no hardware):
-python rtk_bridge.py --source test
-```
+On the map:
 
-The bridge **also serves the web app and opens your browser automatically**, so
-you only run one command in one window — no separate `python -m http.server`
-needed. In the app choose **Data source → Bridge (WS) → Connect**
-(`ws://localhost:8765`). (Disable with `--no-web` / `--no-browser`; change the
-page port with `--web-port`.)
+- **Solid lines** are your property lines: red for the 35-acre tract, blue for Lot 1.
+- **Dashed yellow** is the line between your two parcels.
+- **Grey dashed** lines are the neighbors' lines.
+- **Monument dots** are white when described in the documents, grey when not, and green
+  once measured.
+- **Tap anywhere** on the map to see whether that spot is inside your land and how far it
+  is from the line. You can also navigate to it or save it.
 
-### Getting RTK Fixed accuracy — laptop feeds corrections (Option B)
+**Menu → Tools** has more:
 
-Standalone GPS is ~1–2 m. To get **centimetre** accuracy the receiver needs a
-live stream of **RTK corrections (RTCM)**. The bridge can pull those from an
-NTRIP caster over **this laptop's internet** (e.g. Starlink) and inject them
-into the receiver over the same Bluetooth link — so the receiver needs no WiFi
-and no phone hotspot.
+- **Stake out a line.** Shows how far left or right of a line you are, which helps when
+  setting fence posts.
+- **Property-line alert.** Beeps (and vibrates a phone) when you get within a set distance
+  of your line, and twice when you cross it.
+- **Your track.**
+- **Demo walk.** A simulated walk, for when no receiver is connected.
 
-```bash
-pip install pyserial
+## The monuments
 
-# Relay NMEA up to the app AND feed corrections down to the receiver:
-python rtk_bridge.py --source serial:COM5:115200 \
-    --ntrip ntrip://USER:PASS@CASTER_HOST:PORT/MOUNTPOINT
-```
+| Id | Corner | What's there (per the documents) |
+|---|---|---|
+| **TPB** | Shared corner: Lot 1 NW / 35-ac SW | Found #4 rebar (shown on the plat). One monument for both parcels. |
+| **LPNE** | Road corner: 35-ac S / Lodgepole NE | ½" rebar with 1" plastic cap "LS 26296" (plat note 2), on the west right-of-way of Shadow Mountain Dr. |
+| **W16** | Lot 1 SW (W 1/16 corner, Sec 5/8) | **2" aluminum cap on #6 rebar stamped "W1/16 S5 S8 1996 LS 26296"**. It replaced a found #3 rebar. |
+| **L1NE**, **L1SE** | Lot 1 east corners | ½" rebar with 1" plastic cap "LS 26296" (plat note 2). |
+| **S14** | S ¼ corner of Section 5 | Brass plate in concrete, LS 865; also a USGS benchmark. Very stable control. |
+| **P1NW**, **P1NE** | 35-acre north corners | Not described in the deed; look for any pin or pipe. |
+| ROW1–7, P1R1–7 | Curve points along the road | Shown when zoomed in. |
 
-What it does each second: connects to the caster with your credentials, sends
-your live position (GGA) up so network/VRS casters return the right
-corrections, streams the RTCM back, and writes it into the receiver. Within a
-minute or two of open sky the app's **Fix** pill goes FLOAT → **RTK FIX** and
-accuracy drops to a few cm.
+## Phone or tablet
 
-Pick a correction source and drop it into `--ntrip`:
-- **u-blox PointPerfect Flex** (~$15/mo via SparkFun, month-to-month, covers all
-  of Colorado, no local base) — use the Flex NTRIP host/port/mountpoint and
-  credentials from your subscription.
-- **RTK2go** (free community caster) — works if a base is within ~10–30 km;
-  the username is your email and password is usually `none`:
-  `--ntrip ntrip://you@email.com:none@rtk2go.com:2101/MountName`
+**Menu → Status** shows a QR code. Scan it with a phone on the same Wi-Fi and the phone
+gets the same live view, and can save points too. Settings stay on the laptop. If the phone
+can't load the page, allow Python through the Windows firewall for *Private* networks.
 
-  Find a nearby free base first (pass your approximate lat,lon):
-  ```bash
-  python rtk_bridge.py --find-bases 39.503,-105.306
-  ```
-  It lists the closest RTK2go mountpoints by distance, flagging ones within
-  ~15 km (great) and ~35 km (usable). Scan another caster with `--caster host:port`.
+Over Wi-Fi the phone can't hold its screen awake (browsers only allow that on secure
+pages), so set its screen timeout longer while you work.
 
-Notes:
-- On the SparkFun **Surveyor**, corrections are injected over **Bluetooth**, so
-  pair the receiver over Bluetooth and use that COM port as the `--source`.
-- The receiver computes the RTK fix; the app just displays the improved NMEA.
-- Because you calibrate with two pins measured by the same RTK-fixed receiver,
-  small absolute biases cancel — your in/out result is accurate relative to your
-  corners as long as you're **RTK Fixed**.
+## Troubleshooting
 
-### Running fully wireless (no USB cable)
+| Symptom | Fix |
+|---|---|
+| *Receiver: Not found / Port busy* | Turn the receiver on and keep it within ~30 ft. Close u-center and any other copy of the bridge. |
+| *Corrections: Refused* | Check the username, password and mountpoint. For PointPerfect use **NEAR-RTCM**: NEAR-SPARTN can't be used over Bluetooth. |
+| Stuck on FLOAT | Corrections are arriving but the receiver needs a clearer sky. Give it a minute or two away from trees. |
+| *Can't reach Parcel RTK on the laptop* | The black window was closed, or the phone is on a different network. |
+| Blank map in the field | Map tiles are cached on the laptop. Pan around the property once while online and they work offline afterward. The outline itself always draws. |
+| Outline looks a few feet off the photo | Normal: satellite photos are often off by 3–10 ft. Measured monuments are the real answer. |
 
-Bluetooth carries everything — NMEA up to the app and corrections down to the
-receiver — so you can leave the USB cable off entirely:
+## What the documents say
 
-1. **Pair once:** Windows → Bluetooth & devices → Add device → pick the
-   receiver (e.g. `Surveyor-xxxx`). Windows creates a COM port for it; run
-   `python rtk_bridge.py --list` to find it (use the "outgoing" one), then use
-   that port as the `--source`.
-2. **Power:** with no USB cable the receiver runs on its internal battery —
-   keep it charged, or clip on a USB power bank (charging only, no data needed)
-   for long sessions.
-3. **Stay in range:** classic Bluetooth reaches ~10 m / 30 ft, so carry the
-   laptop with you (backpack, ATV) rather than leaving it parked across the
-   property. The bridge auto-reconnects if the link drops briefly, so short
-   dropouts heal themselves.
-4. **App stays in Bridge (WS) mode** — the browser's USB option can't see
-   classic Bluetooth, which is exactly why the bridge exists.
+The geometry comes straight from the recorded calls (transcribed in `web/js/data.js`) and
+was checked hard:
 
----
+- **Lodgepole Pines plat**: all 11 boundary calls close to 0.0015 ft, every curve checks
+  (arc, chord, tangency), and the areas match the plat (Lot 1: 14.575 vs 14.57 ac).
+- **The 35-acre deed has a typo.** Course 5 says *radius 340.57*, but its arc (97.83) and
+  delta (16°04'50") require **348.57**. The tangents on both sides confirm the delta. As
+  written the deed misses closing by 2.25 ft; corrected, it closes to 0.013 ft. The app
+  uses the corrected value and shows the reasoning under **Status → Survey documents**.
+- **The two documents fit together** through their two shared monuments. The deed's
+  bearings are about 1'58" off from the plat's measured bearings, which is the same
+  record-vs-measured difference the plat itself shows. With that rotation applied, the deed
+  lands on the surveyed road corner within 0.016 ft.
+- **One honest disagreement.** The deed puts the 35-acre NW corner 0.7 ft off the straight
+  extension of Lot 1's west line. Measuring that corner settles it.
 
-## Two-pin calibration (aligning the plat to the world)
-
-The recorded deed gives the parcel shape and the bearings/distances between
-corners, but **not** real-world lat/lon. Two measured corners fix that: they pin
-down position, rotation, and scale (a similarity transform). This is exactly the
-"use two pins to align it" you asked for.
-
-1. Find a **physical monument** (rebar/pin/cap) at a known corner. The named
-   corners available are **TPB** (True Point of Beginning / SW), **NW**, **NE
-   (at the county road)**, and **S (at the county road)**.
-2. Open **⚙ Setup → Two-pin calibration**. Under **Pin 1**, choose which corner
-   you're standing on, then tap **⦿ Capture (avg 5s)** and hold the rover still
-   over the mark. It averages 5 s of fixes.
-3. Move to a **second, different** corner and repeat under **Pin 2**.
-   Use two corners that are **far apart** (e.g. NW and S) for the best angular
-   accuracy.
-4. Tap **Apply calibration**. The parcel snaps onto the map and IN/OUT goes
-   live.
-
-**Calibration quality.** After applying, the panel shows:
-- **Platted vs measured distance** between your two pins.
-- **Scale error %** — how your measured pin distance compares to the deed.
-  Under ±0.3 % is excellent; a large value usually means a wrong corner pick or
-  a non-fixed solution.
-- **Plat rotation** — the angle between plat bearings and true north.
-
-Calibration and pins are saved in the browser, so you don't have to redo them
-each visit (as long as you use the same browser and don't clear site data).
-
-> Two pins assume the deed's internal geometry is accurate (it closes to ~2 ft
-> over a 5,400 ft perimeter here — typical for the era). For legal boundary
-> decisions, always rely on a licensed surveyor; this tool is for field
-> orientation, not for setting binding corners.
-
----
-
-## Using it in the field
-
-- **IN / OUT banner** with live distance to the nearest boundary line.
-- **Navigate to corner**: pick a corner under *Setup → Navigate to corner* to
-  get a live distance, bearing, on-screen arrow, and a guide line on the map —
-  handy for finding a buried pin.
-- **Follow (◎)** keeps the map centred on you; tap once to free-pan.
-- **Basemap**: Satellite (Esri), Streets (OSM), or None. Satellite/Streets need
-  internet — **load the map over Wi-Fi before you head out** if the property has
-  no signal; the parcel outline always draws regardless.
-- **Live coordinates**: the bar under the status shows your current lat/long
-  (7 decimals ≈ cm), elevation, and accuracy.
-- **Saved points**: tap **📍 Save point** to drop a waypoint at your current
-  position with a **note** (e.g. "NW pin, yellow cap"). Recall them under
-  **Setup → Saved points** — each shows its coordinates, accuracy, fix type and
-  time, with **Go to** (recenter), **Copy**, **Delete**, and **Download CSV**.
-  Saved points also appear in the **Navigate** list, so you can walk back to one
-  with a live bearing/distance even before the parcel is calibrated.
-- **Track** breadcrumb and a raw **NMEA log** for troubleshooting.
-
----
-
-## How the boundary is computed
-
-`index.html` builds each polygon from its deed in `PARCEL_DEFS` (see the
-*PARCEL GEOMETRY* section). Lines use quadrant bearings → azimuths; curves are
-densified from their radius, delta, and tangent direction. If you ever need to
-correct a call, edit `PARCEL_DEFS` — it's plain, readable data.
-
-**Two parcels, one calibration.** The app carries both:
-- **31652 Shadow Mountain Dr** — ~35.0 ac (closes to 2.25 ft over 5,425 ft).
-- **Lodgepole Pines Lot 1** — ~14.58 ac (closes to 0.00 ft; plat says 14.57).
-
-Both deeds tie to the same Section 5 grid and **share a corner** (parcel 1's
-True Point of Beginning is Lot 1's NW corner), so they're built in one shared
-local coordinate frame. That means a **single two-pin calibration places both**
-— you don't calibrate twice. The status banner names which parcel you're in
-("IN — Shadow Mtn 35 ac" / "IN — Lodgepole Lot 1") or "OUT" with the nearest
-parcel and distance to its line.
+**Why version 1 "looked a bit off":** it converted coordinates with a sea-level
+shortcut that stretched east-west distances by 0.3% (about 6 ft across the property). It
+also used the deed typo as written. Version 2 uses exact earth-centered geometry and ground
+distances at your elevation.
 
 ## Files
-- `index.html` — the whole app (Leaflet embedded; works offline).
-- `rtk_bridge.py` — optional NMEA→WebSocket bridge for Bluetooth/TCP.
-- `serve.bat` / `serve.sh` — start a localhost server and open the app.
+
+| Path | What |
+|---|---|
+| `rtk_bridge.py` | The program you run (receiver link, corrections, web server, updater). |
+| `web/` | The app. |
+| `rtk_config.json` | Your settings, **including your NTRIP password**. It stays on this laptop: never uploaded, never sent to the browser, never overwritten by updates. |
+| `rtk_data/` | Your project (calibration and saved points), map-tile cache, optional NMEA logs. |
+| `tests/` | Automated tests (see `CLAUDE.md`). |
+
+The first version is still available as
+<https://github.com/gordonjs/echoesvoyage/archive/fe5d563.zip>.

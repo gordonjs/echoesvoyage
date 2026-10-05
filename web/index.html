@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1419">
+<title>Parcel RTK</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="map" aria-label="Map"></div>
+
+<header id="top">
+  <div id="verdict" class="none" role="status" aria-live="polite">
+    <div class="v-big">—</div><div class="v-sub">starting…</div>
+  </div>
+  <div id="stats">
+    <div class="st"><span class="k">Fix</span><span class="v"><span id="sFix" class="pill p-none">—</span></span></div>
+    <div class="st"><span class="k">Accuracy</span><span class="v" id="sAcc">—</span></div>
+    <div class="st"><span class="k">Sats</span><span class="v" id="sSats">—</span></div>
+    <div class="st" title="Age of the last RTK correction the receiver used"><span class="k">Corr. age</span><span class="v" id="sCorr">—</span></div>
+  </div>
+</header>
+<div id="line2">
+  <div id="edgeInfo"><span id="edgeArrow" class="arrow">↑</span><span id="edgeText">—</span></div>
+  <div id="coords" title="Latitude, longitude (WGS84) and elevation"><span id="cLat">—</span> <span id="cLon"></span> <span id="cAlt" class="dim"></span></div>
+  <button id="btnSave" class="btn primary small" title="Save this spot with a note">📍 Save</button>
+</div>
+<div id="banner" hidden></div>
+
+<div id="navCard" class="card-float" hidden>
+  <div class="nc-row"><div class="nc-arrow" id="navArrow">↑</div>
+    <div><div class="nc-title">Going to <b id="navName">—</b></div>
+      <div class="nc-dist" id="navDist">—</div><div class="nc-sub" id="navSub"></div></div>
+    <button class="x" id="navClose" title="Stop navigating">✕</button></div>
+  <div id="navHere" hidden>
+    <div class="nc-look" id="navLook"></div>
+    <button class="btn good" id="navMeasure">⦿ Measure this monument</button>
+  </div>
+</div>
+
+<div id="stakeCard" class="card-float" hidden>
+  <div class="nc-row"><div><div class="nc-title">Staking <b id="stakeName">—</b></div>
+    <div class="sk-off" id="stakeOff">—</div><div class="nc-sub" id="stakeSub"></div></div>
+    <button class="x" id="stakeClose" title="Stop staking">✕</button></div>
+</div>
+
+<div id="adjCard" class="card-float" hidden></div>
+
+<div id="fabs">
+  <button class="fab on" id="fFollow" title="Follow my position">◎</button>
+  <button class="fab" id="fLayer" title="Change map layer">▦</button>
+  <button class="fab" id="fZoomIn" title="Zoom in">+</button>
+  <button class="fab" id="fZoomOut" title="Zoom out">−</button>
+</div>
+<button id="btnMenu" class="btn">☰ Menu</button>
+
+<aside id="panel" aria-label="Menu">
+  <div class="p-head">
+    <nav id="tabs">
+      <button data-tab="status" class="on">Status</button>
+      <button data-tab="calib">Calibrate</button>
+      <button data-tab="points">Points</button>
+      <button data-tab="tools">Tools</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <button class="x" id="pClose" title="Close">✕</button>
+  </div>
+  <div class="p-body">
+    <section data-pane="status"></section>
+    <section data-pane="calib" hidden></section>
+    <section data-pane="points" hidden></section>
+    <section data-pane="tools" hidden></section>
+    <section data-pane="settings" hidden></section>
+  </div>
+</aside>
+
+<div id="modal" hidden><div class="m-card" id="mCard"></div></div>
+<div id="toast" role="status"></div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="js/data.js"></script>
+<script src="js/cogo.js"></script>
+<script src="js/geodesy.js"></script>
+<script src="js/model.js"></script>
+<script src="js/calib.js"></script>
+<script src="js/locate.js"></script>
+<script src="js/nmea.js"></script>
+<script src="js/state.js"></script>
+<script src="js/app-core.js"></script>
+<script src="js/app-map.js"></script>
+<script src="js/app-panels.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
