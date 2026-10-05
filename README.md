@@ -1,5 +1,7 @@
 # Parcel RTK
 
+> **New here? Read the step-by-step [Owner's Manual](MANUAL.md).**
+
 Walk your land with a SparkFun RTK Surveyor and see, live and to the inch, whether you are
 **IN** or **OUT** of your property, and how far you are from the line.
 
