@@ -21,7 +21,7 @@ MODE=tnm ./run_all.sh             # pipeline test, NOT for flight use (no WSA / 
 
 `run_all.sh` builds z6-12 first and estimates the finished size. It stops before z13 if any file looks likely to pass 1 GB; set `FORCE_Z13=1` to build z13 anyway. Downloads and intermediates go to `work/` (gitignored). Outputs, previews and `README.txt` go to `output/`.
 
-Network hosts used: `prd-tnm.s3.amazonaws.com`, `www.sciencebase.gov` (and its S3 file bucket), `www.arcgis.com`, `blm-egis.maps.arcgis.com`, and the BLM feature-service hosts (`services*.arcgis.com` / `gis.blm.gov`).
+Network hosts used: `prd-tnm.s3.amazonaws.com` (USGS boundaries), `www.sciencebase.gov` (PAD-US 4.1), `blm-egis.maps.arcgis.com` and `www.arcgis.com` (BLM hub item search and the SMA geodatabase download), and `services1.arcgis.com` (BLM NLCS feature services).
 
 ## Steps
 

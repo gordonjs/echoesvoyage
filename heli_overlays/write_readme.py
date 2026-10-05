@@ -70,11 +70,17 @@ def main():
     w("-------")
     for key, s in man.get("sources", {}).items():
         if key == "blm":
+            used = {"sma": "BLM (g), USFS (f), state (e), tribal/BIA (c)",
+                    "nlcs_wsa": "WSA (b)", "nlcs_wilderness": "wilderness (a), with PAD-US",
+                    "nlcs_nm_nca": "BLM National Monument / NCA (d)"}
             for k, r in s.items():
-                w(f"* BLM {k}: {r.get('title')}")
-                w(f"    item {r.get('item_id', '-')}  item modified {r.get('item_modified')}"
-                  f"  data last edit {r.get('data_last_edit')}")
-                w(f"    {r.get('layer_url')}")
+                w(f"* {r.get('title')}  [{r.get('item_type', 'Feature Service')}]")
+                w(f"    used for: {used.get(k, k)}")
+                w(f"    hub item {r.get('item_id', '-')}  item modified {r.get('item_modified')}"
+                  + (f"  data last edit {r['data_last_edit']}" if r.get("data_last_edit") else ""))
+                w(f"    {r.get('layer_url') or r.get('download')}")
+                if r.get("layer_name"):
+                    w(f"    layer {r['layer_name']}")
                 w(f"    {r.get('features', '?'):,} features in 5-state envelope; "
                   f"downloaded {r.get('downloaded')}")
             continue
@@ -88,6 +94,30 @@ def main():
         w(f"    downloaded {s.get('downloaded')}")
     w("")
 
+    if mode == "authoritative":
+        w("SOURCE HANDLING NOTES")
+        w("---------------------")
+        w("* Wilderness (a) = PAD-US 4.1 Designation Des_Tp 'WA' (BLM, USFS, NPS, FWS)")
+        w("  unioned with the current BLM NLCS wilderness layer.")
+        notes = nmeta.get("notes", {})
+        usfs = notes.get("usfs_wsas_added", [])
+        w(f"* WSA (b) = BLM NLCS WSA layer, minus {notes.get('wsa_inholdings_dropped', '?')}"
+          " Utah features named 'Inholding'")
+        w("  (state/private sections inside WSAs per SMA; the WSA polygons are holed")
+        w(f"  there), plus {len(usfs)} USFS WSAs that only PAD-US carries:")
+        for i in range(0, len(usfs), 4):
+            w("    " + ", ".join(usfs[i:i + 4]))
+        w("  PAD-US 'WSA' rows that are NPS/FWS proposed or recommended wilderness")
+        w("  are not used.")
+        w("* Tribal (c) = SMA ADMIN_AGENCY_CODE 'BIA'.")
+        w("* State (e) = SMA 'ST'. SMA does not split state trust land from other")
+        w("  state land, so this also includes state parks, wildlife areas and")
+        w("  sovereign lake/river beds - all call-first.")
+        w("* USFS (f) = SMA 'USFS'; BLM (g) = SMA 'BLM'.")
+        w("* The national SMA geodatabase's spatial index returns nothing for a bbox")
+        w("  query in GDAL, so features are filtered on bounds after a full read.")
+        w("")
+
     w("PROCESSING")
     w("----------")
     w("1. fetch_sources.py    download sources, record URLs / versions / dates")
@@ -99,7 +129,8 @@ def main():
     w("4. make_mbtiles.py     256 px palette-PNG tiles z6-13; fill + 1 px outline from")
     w("   the class raster; empty tiles skipped; identical tiles stored once")
     w("   (map/images tables + tiles view)")
-    w("5. validate.py         previews, spot checks, overlap check")
+    w("5. validate.py         previews, spot checks, overlap check, 2019 designation")
+    w("   currency check, state/private-inside-no-land tally")
     w("")
 
     if val:
@@ -129,6 +160,13 @@ def main():
                   "wilderness by >5% (wilderness wins there)")
                 for r in st[:15]:
                     w(f"        {r['wsa']}: {r['share_now_wilderness']:.0%} now wilderness")
+        nf = val.get("nonfederal_in_noland")
+        if nf:
+            w("  State (SMA ST) / private (SMA PVT) land inside no-land classes, km2")
+            w("  (inholdings enclosed by a designation boundary; priority paints them")
+            w("  with the designation):")
+            for k, v in nf.items():
+                w(f"        {k}: state {v.get('ST', 0):,.1f}   private {v.get('PVT', 0):,.1f}")
         ov = val.get("overlap", {})
         w(f"  Overlap between classes: {ov.get('overlap_area_m2_mercator', '?')} m2 "
           f"(Mercator) across {ov.get('pairs_touching', '?'):,} touching pairs "

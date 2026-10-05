@@ -41,13 +41,14 @@ OUTLINE_DARKEN = 0.70   # outline = fill hue with RGB scaled by this factor
 PRODUCTS = {
     # file stem: (classes, MBTiles name, description)
     "SW_Landable_BLM": (["g"], "SW Landable BLM",
-                        "BLM-administered surface outside wilderness, WSA, tribal, "
-                        "BLM NM/NCA and state trust land (class g)."),
+                        "BLM-administered surface (SMA) outside wilderness, WSA, tribal, "
+                        "BLM NM/NCA and state land (class g)."),
     "SW_NoLand": (["a", "b", "c", "d"], "SW No-Land",
-                  "Wilderness (all agencies), BLM WSA, tribal land, BLM National "
-                  "Monuments / NCAs (classes a-d)."),
+                  "Wilderness (all agencies), WSA (BLM NLCS + USFS), tribal land (BIA), "
+                  "BLM National Monuments / NCAs (classes a-d)."),
     "SW_CallFirst": (["e", "f"], "SW Call-First",
-                     "State trust land and non-wilderness USFS (classes e-f)."),
+                     "State land incl. state trust (SMA 'ST') and non-wilderness USFS "
+                     "(classes e-f)."),
 }
 
 MINZOOM = 6

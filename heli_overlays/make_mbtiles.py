@@ -231,9 +231,15 @@ def main():
     ap.add_argument("--zooms", default=f"{config.MINZOOM}-{config.MAXZOOM}")
     ap.add_argument("--fresh", action="store_true", help="delete existing MBTiles first")
     ap.add_argument("--procs", type=int, default=mp.cpu_count())
+    ap.add_argument("--meta-only", action="store_true",
+                    help="rewrite metadata of existing files, render nothing")
     a = ap.parse_args()
     zlo, zhi = map(int, a.zooms.split("-"))
     t0 = time.time()
+    if a.meta_only:
+        write_metadata({stem: Writer(stem, False) for stem in config.PRODUCTS})
+        report()
+        return
 
     df = pyogrio.read_dataframe(config.CLASSES, layer="classes")
     geoms = shapely.get_parts(df.geometry.values)
@@ -289,8 +295,17 @@ def main():
                 log(f"  {done}/{len(jobs)} tasks; tiles: " + ", ".join(
                     f"{s}={wr.count:,}" for s, wr in writers.items()))
 
+    write_metadata(writers)
+    report()
+    log(f"done in {time.time() - t0:.0f}s")
+
+
+def write_metadata(writers):
+    states = pyogrio.read_dataframe(config.NORMALIZED, layer="states")
+    w, s, e, n = states.total_bounds
     for stem, wr in writers.items():
         classes, name, desc = config.PRODUCTS[stem]
+        wr.flush()   # zoom range must include the last buffered batch
         zs = wr.db.execute("SELECT MIN(zoom_level), MAX(zoom_level) FROM map").fetchone()
         wr.finish({
             "name": name,
@@ -299,13 +314,11 @@ def main():
             "version": "1.0",
             "description": desc,
             "attribution": "BLM SMA/NLCS, USGS PAD-US, US Census TIGER",
-            "bounds": ",".join(str(v) for v in lnglat),
+            "bounds": f"{w:.5f},{s:.5f},{e:.5f},{n:.5f}",
             "center": f"{(w + e) / 2:.4f},{(s + n) / 2:.4f},{config.MINZOOM}",
-            "minzoom": zs[0] if zs[0] is not None else zlo,
-            "maxzoom": zs[1] if zs[1] is not None else zhi,
+            "minzoom": zs[0],
+            "maxzoom": zs[1],
         })
-    report()
-    log(f"done in {time.time() - t0:.0f}s")
 
 
 def report():

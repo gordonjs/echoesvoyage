@@ -28,6 +28,8 @@ import geopandas as gpd
 import pandas as pd
 import pyogrio
 import requests
+import shapely
+from shapely import box as shapely_box
 
 import config
 
@@ -39,9 +41,7 @@ AGOL = "https://www.arcgis.com/sharing/rest"
 BLM_ORG_KEY = "blm-egis"                       # blm-egis.maps.arcgis.com
 BLM_ITEMS = {
     # key: exact hub title (verified against data.gov harvest of the hub)
-    "sma": ["BLM Natl Surface Management Agency Area Polygons",
-            "BLM Natl SMA Surface Management Agency Area Polygons",
-            "Surface Management Agency"],
+    "sma": ["BLM National SMA Surface Management Agency Area Polygons"],  # File Geodatabase
     "nlcs_wsa": ["BLM Natl NLCS Wilderness Study Areas Polygons"],
     "nlcs_wilderness": ["BLM Natl NLCS Wilderness Areas Polygons"],
     "nlcs_nm_nca": ["BLM Natl NLCS National Monuments National Conservation Areas Polygons"],
@@ -95,6 +95,11 @@ def download(url, dest, force=False):
     return dest
 
 
+def mtime_utc(path):
+    return dt.datetime.fromtimestamp(Path(path).stat().st_mtime, dt.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
 def load_manifest():
     if config.MANIFEST.exists():
         return json.loads(config.MANIFEST.read_text())
@@ -123,11 +128,12 @@ def fetch_tnm(m, force):
         files.append(str(z.relative_to(config.WORK)))
     m["sources"]["tnm"] = {
         "title": "USGS National Boundary Dataset (NBD) state GeoPackages",
-        "used_for": "state outlines (GU_StateOrTerritory = TIGER/Line 2025)",
+        "used_for": "state outlines / clip (GU_StateOrTerritory = TIGER/Line 2025); "
+                    "Navajo Nation reference boundary for the spot check (GU_NativeAmericanArea)",
         "url": TNM_S3 + "/GOVTUNIT_<State>_State_GPKG.zip",
         "version": "NBD published " + ", ".join(sorted(set(v for v in pubdates.values() if v))),
         "component_versions": "TIGER/Line 2025 (pub 2025-06-01); PAD-US 4.1 (pub 2025-03-31)",
-        "downloaded": now(),
+        "downloaded": min(mtime_utc(config.WORK / f) for f in files),
         "files": files,
     }
 
@@ -151,21 +157,24 @@ def fetch_padus(m, force):
         if not cand:
             sys.exit(f"PAD-US: no state file for {st} in {[f.get('name') for f in files]}")
         f = cand[0]
-        url = f.get("downloadUri") or f.get("url")
+        # catalog/file/get serves the file from www.sciencebase.gov itself;
+        # downloadUri points at sciencebase.usgs.gov.
+        url = f"https://www.sciencebase.gov/catalog/file/get/{PADUS_ITEM}?name={f['name']}"
         z = download(url, dest_dir / f["name"], force)
         if force or not list(dest_dir.glob(f"**/*{st}*.gdb")):
             with zipfile.ZipFile(z) as zf:
                 zf.extractall(dest_dir / z.stem)
-        got.append({"state": st, "name": f["name"], "url": url, "size": f.get("size")})
+        got.append({"state": st, "name": f["name"], "url": url, "size": f.get("size"),
+                    "uploaded": f.get("dateUploaded")})
     m["sources"]["padus"] = {
         "title": title,
-        "used_for": "Wilderness, all agencies (Designation, Des_Tp='WA'); non-BLM WSAs",
+        "used_for": "Wilderness, all agencies (Designation, Des_Tp='WA'); USFS WSAs",
         "url": f"https://www.sciencebase.gov/catalog/item/{PADUS_ITEM}",
         "doi": "https://doi.org/10.5066/P96WBCHS",
         "version": "PAD-US 4.1",
         "dates": dates,
         "last_updated": (item.get("provenance") or {}).get("lastUpdated"),
-        "downloaded": now(),
+        "downloaded": min(mtime_utc(dest_dir / g["name"]) for g in got),
         "files": got,
     }
 
@@ -181,10 +190,12 @@ def find_item(titles, orgid):
     for t in titles:
         q = f'title:"{t}" AND orgid:{orgid}'
         j = get(f"{AGOL}/search", params={"q": q, "f": "json", "num": 50}).json()
-        res = [r for r in j.get("results", []) if r.get("url")]
+        res = [r for r in j.get("results", [])
+               if r.get("url") or r.get("type") == "File Geodatabase"]
         exact = [r for r in res if r["title"].strip().lower() == t.lower()]
         pool = exact or res
-        fs = [r for r in pool if r.get("type") == "Feature Service"] or pool
+        fs = ([r for r in pool if r.get("type") == "Feature Service"]
+              or [r for r in pool if r.get("type") == "File Geodatabase"] or pool)
         if fs:
             fs.sort(key=lambda r: r.get("modified", 0), reverse=True)
             return fs[0], [(r["title"], r.get("type"), r.get("url")) for r in res[:10]]
@@ -252,6 +263,40 @@ def query_layer(url, dest):
             "description_head": (info.get("description") or "")[:300]}
 
 
+def fgdb_item(item, dest, force):
+    """Download a File Geodatabase item, keep features in ENVELOPE."""
+    z = download(f"{AGOL}/content/items/{item['id']}/data",
+                 dest.parent / (item.get("name") or f"{item['id']}.gdb.zip"), force)
+    downloaded = mtime_utc(z)
+    out = dest.parent / z.name.replace(".zip", "")
+    if force or not out.exists():
+        with zipfile.ZipFile(z) as zf:
+            zf.extractall(out)
+    gdb = next(p for p in out.rglob("*.gdb") if p.is_dir())
+    layers = [(n, g) for n, g in pyogrio.list_layers(gdb) if g and "Polygon" in g]
+    log(f"  {gdb.name} polygon layers: {layers}")
+    # The SMA gdb also carries a withdrawals layer; take the SMA polygons.
+    pick = [n for n, _ in layers if "withdraw" not in n.lower()]
+    lyr = max(pick, key=lambda n: pyogrio.read_info(gdb, layer=n)["features"])
+    info = pyogrio.read_info(gdb, layer=lyr)
+    x0, y0, x1, y1 = gpd.GeoSeries([shapely_box(*ENVELOPE)], crs=4326).to_crs(
+        info["crs"]).total_bounds
+    # Filter on bounds here rather than with GDAL's bbox: the spatial index in
+    # SMA_WM.gdb (2026-06) makes OpenFileGDB return 0 features for a bbox query.
+    # Lower-48 SMA is dissolved per agency per admin state, so this is a few
+    # hundred large multipolygons.
+    gdf = pyogrio.read_dataframe(gdb, layer=lyr)
+    b = shapely.bounds(gdf.geometry.values)
+    gdf = gdf[(b[:, 0] <= x1) & (b[:, 2] >= x0) & (b[:, 1] <= y1) & (b[:, 3] >= y0)]
+    log(f"  {lyr}: {len(gdf):,} of {info['features']:,} features in envelope")
+    if dest.exists():
+        dest.unlink()
+    pyogrio.write_dataframe(gdf, dest, driver="GPKG", promote_to_multi=True)
+    return {"features": len(gdf), "layer_name": f"{gdb.name}/{lyr}", "downloaded": downloaded,
+            "download": f"{AGOL}/content/items/{item['id']}/data",
+            "file_size": z.stat().st_size}
+
+
 def fetch_blm(m, force, overrides):
     dest_dir = config.RAW / "blm"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -274,15 +319,19 @@ def fetch_blm(m, force, overrides):
                 if key == "nlcs_wilderness":   # optional; PAD-US covers wilderness
                     continue
                 sys.exit(f"cannot locate BLM item for {key}; pass --url {key}=<layer url>")
-            log(f"  {key}: '{item['title']}' ({item['id']}) -> {item['url']}")
-            url = item["url"]
+            log(f"  {key}: '{item['title']}' ({item['id']}, {item.get('type')}) -> {item.get('url')}")
+            url = item.get("url")
             rec.update(title=item["title"], item_id=item["id"],
                        hub_page=f"https://gbp-blm-egis.hub.arcgis.com/datasets/{item['id']}",
                        service=url, item_modified=ms_to_date(item.get("modified")),
                        candidates=cands)
-        lurl = layer_url(url)
-        rec["layer_url"] = lurl
-        rec.update(query_layer(lurl, dest))
+        if key not in overrides and item.get("type") == "File Geodatabase":
+            rec["item_type"] = "File Geodatabase"
+            rec.update(fgdb_item(item, dest, force))
+        else:
+            lurl = layer_url(url)
+            rec["layer_url"] = lurl
+            rec.update(query_layer(lurl, dest))
         rec["file"] = str(dest.relative_to(config.WORK))
         out[key] = rec
         save_manifest(m)

@@ -15,6 +15,7 @@ Modes
 """
 import argparse
 import json
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -27,6 +28,7 @@ import config
 
 warnings.filterwarnings("ignore", message=".*CLIPPOLY.*")
 THEMES = ["wilderness", "wsa", "tribal", "nm_nca", "state_trust", "usfs", "blm"]
+NOTES = {}  # facts about source handling, copied into normalized_meta.json
 
 
 def log(*a):
@@ -37,8 +39,10 @@ def norm(gdf, name_col=None, agency=None, src=""):
     """Reduce to the standard schema."""
     out = gpd.GeoDataFrame(
         {
-            "name": gdf[name_col].astype(str) if name_col and name_col in gdf else "",
-            "agency": gdf[agency].astype(str) if agency in gdf.columns else (agency or ""),
+            "name": gdf[name_col].fillna("").astype(str) if name_col and name_col in gdf
+            else "",
+            "agency": gdf[agency].fillna("").astype(str) if agency in gdf.columns
+            else (agency or ""),
             "src": src,
         },
         geometry=gdf.geometry.values,
@@ -64,7 +68,7 @@ def write(layers, mode):
         pyogrio.write_dataframe(gdf, path, layer=theme, driver="GPKG",
                                 promote_to_multi=True)
     meta = {"mode": mode, "empty_themes": [t for t in THEMES if layers.get(t) is None
-                                           or len(layers[t]) == 0]}
+                                           or len(layers[t]) == 0], "notes": NOTES}
     (config.WORK / "normalized_meta.json").write_text(json.dumps(meta, indent=2))
 
 
@@ -118,39 +122,48 @@ def mode_tnm():
 
 # ------------------------------------------------------------------------ PAD-US
 def padus_layers():
-    """Return (fee, designation) GeoDataFrames from the five PAD-US state GDBs."""
-    fee, des = [], []
+    """Return (fee, designation, proclamation) from the five PAD-US state GDBs."""
+    fee, des, pro = [], [], []
     for st in config.STATES:
         gdbs = list((config.RAW / "padus").glob(f"**/*{st}*.gdb"))
         if not gdbs:
             sys.exit(f"missing PAD-US 4.1 GDB for {st}; run fetch_sources.py")
         gdb = gdbs[0]
         names = [n for n, _ in pyogrio.list_layers(gdb)]
-        f = [n for n in names if "fee" in n.lower()]
-        d = [n for n in names if "designation" in n.lower()]
-        if not f or not d:
-            sys.exit(f"{gdb}: cannot find Fee/Designation layers in {names}")
+        f = [n for n in names if re.search(r"Fee_State", n)]
+        d = [n for n in names if re.search(r"Designation_State", n)]
+        p = [n for n in names if re.search(r"Proclamation_State", n)]
+        if not f or not d or not p:
+            sys.exit(f"{gdb}: cannot find Fee/Designation/Proclamation layers in {names}")
         fee.append(pyogrio.read_dataframe(gdb, layer=f[0]))
         des.append(pyogrio.read_dataframe(gdb, layer=d[0]))
-    fee = pd.concat(fee, ignore_index=True)
-    des = pd.concat(des, ignore_index=True)
-    return gpd.GeoDataFrame(fee, crs=fee.crs), gpd.GeoDataFrame(des, crs=des.crs)
+        pro.append(pyogrio.read_dataframe(gdb, layer=p[0]))
+    return tuple(gpd.GeoDataFrame(pd.concat(x, ignore_index=True), crs=x[0].crs)
+                 for x in (fee, des, pro))
 
 
 def padus_wilderness(des):
     return norm(des[des.Des_Tp == "WA"], "Unit_Nm", "Mang_Name", "PAD-US 4.1 Designation")
 
 
+def padus_true_wsa(des, agencies=("BLM", "USFS")):
+    """PAD-US Des_Tp 'WSA' also carries NPS/FWS proposed or recommended
+    wilderness; keep only units actually named Wilderness Study Areas."""
+    m = ((des.Des_Tp == "WSA") & des.Mang_Name.isin(agencies)
+         & des.Unit_Nm.str.contains("Wilderness Study Area|WSA", case=False, na=False))
+    return des[m]
+
+
 def mode_padus():
-    fee, des = padus_layers()
+    fee, des, pro = padus_layers()
     s = "PAD-US 4.1 "
     blm_des = des[des.Mang_Name == "BLM"]
-    tribal = fee[(fee.Mang_Type == "TRIB") | (fee.Des_Tp == "TRIBL")]
+    tribal = pro[pro.Mang_Type == "TRIB"]   # tribal lands are in Proclamation in 4.x
     return {
         "states": load_tnm_states(),
         "wilderness": padus_wilderness(des),
-        "wsa": norm(des[des.Des_Tp == "WSA"], "Unit_Nm", "Mang_Name", s + "Designation"),
-        "tribal": norm(tribal, "Unit_Nm", "Mang_Name", s + "Fee"),
+        "wsa": norm(padus_true_wsa(des), "Unit_Nm", "Mang_Name", s + "Designation"),
+        "tribal": norm(tribal, "Unit_Nm", "Mang_Name", s + "Proclamation"),
         "nm_nca": norm(blm_des[blm_des.Des_Tp.isin(["NM", "NCA"])], "Unit_Nm",
                        "Mang_Name", s + "Designation"),
         "state_trust": norm(fee[fee.Mang_Name == "SLB"], "Unit_Nm", "Mang_Name", s + "Fee"),
@@ -209,26 +222,37 @@ def mode_authoritative():
         log("  NLCS WSA status values:", wsa[status].value_counts().to_dict())
         wsa = wsa[~wsa[status].astype(str).str.contains("releas", case=False)]
     wname = pick(wsa, "NLCS_NAME", "WSA_NAME", "NAME")
+    # The national WSA layer carries the non-federal sections inside Utah WSAs
+    # as features named "Inholding" (state trust / private per SMA). Not WSA.
+    inh = wsa[wname].astype(str).str.strip().str.lower() == "inholding"
+    log(f"  NLCS WSA: dropping {int(inh.sum())} 'Inholding' features")
+    NOTES["wsa_inholdings_dropped"] = int(inh.sum())
+    wsa = wsa[~inh]
     wsa_n = norm(wsa, wname, src="BLM NLCS WSA")
     wsa_n["agency"] = "BLM"
 
     nm = read_any(b / "nlcs_nm_nca.gpkg")
-    ncol = pick(nm, "NLCS_TYPE", "DESIG_TYPE", "TYPE")
+    ncol = pick(nm, "sma_code", "NLCS_TYPE", "DESIG_TYPE", "TYPE")
     if ncol:
-        log("  NLCS NM/NCA types:", nm[ncol].value_counts().to_dict())
-    nm_n = norm(nm, pick(nm, "NLCS_NAME", "NAME"), src="BLM NLCS NM/NCA")
+        log("  NLCS NM/NCA types:", nm[ncol].value_counts(dropna=False).to_dict())
+    nm_n = norm(nm, pick(nm, "NCA_NAME", "NLCS_NAME", "NAME"), src="BLM NLCS NM/NCA")
     nm_n["agency"] = "BLM"
 
-    fee, des = padus_layers()
+    fee, des, _ = padus_layers()
     wild = [padus_wilderness(des)]
     wpath = b / "nlcs_wilderness.gpkg"
     if wpath.exists():
         w = read_any(wpath)
-        wn = norm(w, pick(w, "NLCS_NAME", "NAME"), src="BLM NLCS Wilderness")
+        wcol = pick(w, "NLCS_NAME", "NAME")
+        w = w[w[wcol].astype(str).str.strip().str.lower() != "inholding"]
+        wn = norm(w, wcol, src="BLM NLCS Wilderness")
         wn["agency"] = "BLM"
         wild.append(wn)
-    # Non-BLM WSAs (if any) only exist in PAD-US.
-    other_wsa = des[(des.Des_Tp == "WSA") & (des.Mang_Name != "BLM")]
+    # USFS WSAs (Mount Graham AZ, Mount Stirling NV, ...) only exist in PAD-US.
+    other_wsa = padus_true_wsa(des, agencies=("USFS",))
+    log(f"  PAD-US USFS WSAs added: {sorted(set(other_wsa.Unit_Nm))}")
+    NOTES["usfs_wsas_added"] = sorted(set(other_wsa.Unit_Nm.str.replace(
+        r"\s*(Wsa\s*)?Wilderness Study Area$", "", regex=True)))
     layers.update({
         "wilderness": gpd.GeoDataFrame(pd.concat([w.to_crs(4326) for w in wild]),
                                        crs=4326),

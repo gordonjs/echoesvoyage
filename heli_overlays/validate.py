@@ -36,6 +36,26 @@ FALLBACK_POINTS = {
 }
 
 
+def tiger_area(name):
+    """Census TIGER 2025 AIANNH polygon (from the USGS NBD GeoPackages) for
+    areas the source theme carries without names (SMA BIA polygons)."""
+    from normalize_sources import tnm_gpkgs
+    parts = [pyogrio.read_dataframe(f, layer="GU_NativeAmericanArea") for f in tnm_gpkgs()]
+    g = [p[p.NAME == name] for p in parts]
+    g = [x for x in g if len(x)]
+    if not g:
+        return None
+    geom = shapely.union_all(shapely.make_valid(
+        np.concatenate([x.to_crs(config.WEB_MERCATOR).geometry.values for x in g])))
+    return geom
+
+
+REFERENCE_AREAS = {
+    "Navajo Nation (AZ/NM)": ("Census TIGER 2025 'Navajo Nation Reservation'",
+                              lambda: tiger_area("Navajo Nation Reservation")),
+}
+
+
 def lonlat_to_m(lon, lat):
     x = np.radians(lon) * 6378137.0
     y = np.log(np.tan(np.pi / 4 + np.radians(lat) / 2)) * 6378137.0
@@ -194,7 +214,12 @@ def spot_checks():
         rec = {"check": label, "expected": expect, "source_theme": theme}
         if len(hit) == 0:
             rec["found_in_source"] = False
-            if label in FALLBACK_POINTS:
+            ref = REFERENCE_AREAS.get(label)
+            refgeom = ref[1]() if ref else None
+            if refgeom is not None:
+                feat = refgeom
+                rec["note"] = (f"'{theme}' source has no unit names; area taken from {ref[0]}")
+            elif label in FALLBACK_POINTS:
                 feat = shapely.Point(*lonlat_to_m(*FALLBACK_POINTS[label]))
                 rec["note"] = (f"not present in '{theme}' source layer; checked at "
                                f"fallback point {FALLBACK_POINTS[label]}")
@@ -294,6 +319,39 @@ def currency_checks():
     return out
 
 
+def nonfederal_check(res=250.0):
+    """Area of each no-land class lying on SMA state (ST) or private (PVT) land:
+    inholdings that a designation boundary encloses and the priority rule
+    paints with the designation's colour. Tallied on a 250 m raster - a
+    reporting statistic, not an exact overlay."""
+    from affine import Affine
+    from rasterio.features import rasterize
+    sma_path = config.RAW / "blm" / "sma.gpkg"
+    if not sma_path.exists():
+        return {}
+    sma = pyogrio.read_dataframe(sma_path)
+    sma = sma[sma.ADMIN_AGENCY_CODE.isin(["ST", "PVT"])].to_crs(config.WEB_MERCATOR)
+    geoms, cls, _ = class_lookup()
+    x0, y0, x1, y1 = shapely.total_bounds(geoms)
+    w, h = int((x1 - x0) / res) + 1, int((y1 - y0) / res) + 1
+    tr = Affine(res, 0, x0, 0, -res, y1)
+    land = rasterize(zip(sma.geometry.values, np.where(sma.ADMIN_AGENCY_CODE == "ST", 1, 2)),
+                     out_shape=(h, w), transform=tr, fill=0, dtype="uint8")
+    ids = {k: i + 1 for i, k in enumerate("abcd")}
+    sel = np.isin(cls, list(ids))
+    cr = rasterize(zip(geoms[sel], [ids[c] for c in cls[sel]]), out_shape=(h, w),
+                   transform=tr, fill=0, dtype="uint8")
+    ys = y1 - (np.arange(h) + 0.5) * res
+    lat = np.degrees(2 * np.arctan(np.exp(ys / 6378137.0)) - np.pi / 2)
+    px_km2 = (res ** 2) * np.cos(np.radians(lat)) ** 2 / 1e6   # per row
+    out = {}
+    for k, i in ids.items():
+        m = cr == i
+        out[k] = {c: round(float((((land == v) & m).sum(axis=1) * px_km2).sum()), 1)
+                  for c, v in (("ST", 1), ("PVT", 2))}
+    return out
+
+
 def overlap_check():
     geoms, cls, tree = class_lookup()
     a, b = tree.query(geoms, predicate="intersects")
@@ -304,7 +362,7 @@ def overlap_check():
 
 def main():
     out = {"previews": previews(), "spot_checks": spot_checks(), "overlap": overlap_check(),
-           "currency": currency_checks()}
+           "currency": currency_checks(), "nonfederal_in_noland": nonfederal_check()}
     for r in out["spot_checks"]:
         print(f"{r['result']:5s} {r['check']:40s} expect {r['expected']}  "
               f"shares={r.get('area_share_by_class')}  pixel={r.get('tile_pixel')}"
@@ -314,6 +372,7 @@ def main():
     print(f"2019 wilderness present: {len(cur['dingell_2019_wilderness_present'])}, "
           f"missing: {cur['dingell_2019_wilderness_missing']}")
     print("WSA polygons overlapping wilderness >5%:", cur["wsa_overlapping_wilderness"])
+    print("state/private km2 inside no-land classes:", out["nonfederal_in_noland"])
     (config.WORK / "validation.json").write_text(json.dumps(out, indent=2))
 
 
