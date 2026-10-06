@@ -1,0 +1,59 @@
+INSTALLING THE SW HELI CONTENT PACK IN FOREFLIGHT (iPad)
+=======================================================
+
+One file holds everything: SW_Heli_ContentPack.zip (about 65 MB)
+  - 3 landing overlays: SW Landable BLM, SW No-Land, SW Call-First
+  - 7 POI map layers: waterfalls, arches, hoodoos & pillars, hot springs,
+    craters & volcanic, glaciers, viewpoints
+  - every POI as a ForeFlight user waypoint (IDs like WF0042, HS0007)
+
+1. DOWNLOAD ON THE iPAD (Wi-Fi recommended)
+   Open Safari and go to:
+   https://raw.githubusercontent.com/gordonjs/echoesvoyage/claude/foreflight-landing-mbtiles-abhtph/output/SW_Heli_ContentPack.zip
+   Tap "Download" when Safari asks. It lands in Files > Downloads.
+
+2. HAND THE ZIP TO FOREFLIGHT (do NOT tap the zip in Files - that unzips it)
+   Open the Files app > Downloads. Touch and hold SW_Heli_ContentPack.zip >
+   Share > ForeFlight. If ForeFlight isn't in the row of app icons, swipe to
+   the end and tap "More" to find it.
+   (From a Mac instead: AirDrop the zip to the iPad and choose ForeFlight.)
+
+3. CHECK THE IMPORT
+   ForeFlight opens More > Custom Content. You should see the pack
+   "SW Heli Landing & POI"; tap it to see the 10 map layers and the user
+   waypoints.
+
+4. TURN THE LAYERS ON
+   Maps > tap the map-layer menu (top left). Choose a base map (e.g. VFR
+   Sectional), then scroll to the bottom: the custom layers are listed there.
+   Turn on what you want, for example:
+     - SW No-Land + SW Landable BLM for landing planning
+     - SW Call-First when state or USFS land is in play
+     - any of the SW POI layers
+   The overlays are semi-transparent and show from zoom 6 to 13; zooming in
+   further just magnifies the z13 tiles.
+
+5. USE THE POIs
+   Tap a POI icon. The popup shows:
+     - LAND HERE: LANDABLE / CALL FIRST / NO-LAND / NO-GO / OTHER
+     - nearest landable BLM: distance, true bearing, ground elevation, lat/lon
+     - ground elevation at the POI (USGS 3DEP)
+     - flags: NPS no-landing, FAA AC 91-36D 2,000 ft AGL request,
+       Grand Canyon SFRA, DoD land
+     - the user-waypoint ID
+   Icon centre colour = category; icon ring colour = landing class at that
+   spot (same colours as the overlays; grey = NPS / DoD / private / other).
+   To fly there, type the waypoint ID (e.g. WF0042) into Direct-To or the
+   route editor. SW_POI.csv (in output/) lists every ID with its details.
+
+6. QUICK SANITY CHECK
+   Pan to the San Rafael Swell / Green River, UT: Labyrinth Canyon and Muddy
+   Creek wilderness should be red, the Dirty Devil WSA (south-east of Hanksville)
+   orange, and the BLM land around them green.
+
+7. UPDATING LATER
+   To replace the pack with a newer build: More > Custom Content, delete
+   "SW Heli Landing & POI", then import the new zip the same way.
+
+Everything is stored on the iPad and works offline in flight.
+Advisory planning aid only - see README.txt for sources and caveats.

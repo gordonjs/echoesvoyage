@@ -31,5 +31,7 @@ if ! python3 size_gate.py && [ "${FORCE_Z13:-0}" != 1 ]; then
 fi
 python3 make_mbtiles.py --zooms 13-13
 python3 validate.py
+python3 poi.py                 # POIs (GNIS + OpenStreetMap) with landing annotations
+python3 make_content_pack.py   # output/SW_Heli_ContentPack.zip
 python3 write_readme.py >/dev/null
 ls -la "${HELI_OUTPUT:-../output}"

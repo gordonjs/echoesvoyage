@@ -52,6 +52,14 @@ def main():
           f"zoom {meta.get('minzoom')}-{meta.get('maxzoom')}")
         w(f"    bounds={meta.get('bounds')}   {n:,} tiles, {u:,} unique images")
     w("preview_<product>.png, preview_all.png - z7 mosaics of the tiles over state outlines")
+    pack = config.OUTPUT / "SW_Heli_ContentPack.zip"
+    if pack.exists():
+        w(f"SW_Heli_ContentPack.zip   {mb(pack.stat().st_size)}   ForeFlight content pack:")
+        w("    the three overlays + one POI map layer per category (KMZ) +")
+        w("    navdata/user_waypoints.csv (every POI as a searchable user waypoint)")
+    if (config.OUTPUT / "SW_POI.csv").exists():
+        w("SW_POI.csv - every POI with landing class, nearest landable BLM, elevation, flags")
+        w("preview_POI.png - POIs over the faded landing classes")
     w("")
 
     w("CLASSES (no overlaps; earlier class wins)")
@@ -90,6 +98,8 @@ def main():
         if s.get("dates"):
             w(f"    dates: {s['dates']}")
         w(f"    used for: {s.get('used_for')}")
+        if s.get("license"):
+            w(f"    license: {s['license']}")
         w(f"    {s.get('url')}" + (f"   doi {s['doi']}" if s.get("doi") else ""))
         w(f"    downloaded {s.get('downloaded')}")
     w("")
@@ -171,6 +181,31 @@ def main():
         w(f"  Overlap between classes: {ov.get('overlap_area_m2_mercator', '?')} m2 "
           f"(Mercator) across {ov.get('pairs_touching', '?'):,} touching pairs "
           "- snap-rounding noise only")
+        w("")
+
+    ps = load(config.WORK / "poi_stats.json", {})
+    if ps:
+        w("POINTS OF INTEREST")
+        w("------------------")
+        w("Waypoint IDs: WF waterfall, AR arch, HD hoodoo/pillar, HS hot spring,")
+        w("VC crater/volcanic, GL glacier, VP viewpoint + 4 digits. Icon centre colour =")
+        w("category; icon ring colour = landing class at the point (grey = NPS, DoD,")
+        w("private or other). Tap a POI for: land-here status, nearest landable BLM")
+        w("(distance, true bearing, ground elevation, position), POI ground elevation")
+        w("(USGS 3DEP), and flags (NPS 36 CFR 2.17, AC 91-36D 2,000 ft AGL request,")
+        w("Grand Canyon SFRA, DoD land).")
+        w(f"  {'category':12s} {'total':>6s} {'landable':>9s} {'call1st':>8s} {'no-land':>8s}"
+          f" {'no-go':>6s} {'other':>6s}  median nm to landable / share within 2 nm")
+        for cat, n in ps["by_category"].items():
+            st = ps["by_status"].get(cat, {})
+            w(f"  {cat:12s} {n:6d} {st.get('LANDABLE', 0):9d} {st.get('CALL FIRST', 0):8d} "
+              f"{st.get('NO-LAND', 0):8d} {st.get('NO-GO', 0):6d} {st.get('OTHER', 0):6d}"
+              f"  {ps['median_nm_to_landable'].get(cat, 0):5.1f} nm / "
+              f"{ps['within_2nm_of_landable'].get(cat, 0):.0%}")
+        w(f"  by source: {ps.get('by_source')}")
+        if not ps.get("osm_used"):
+            w("  OpenStreetMap was not available for this build: GNIS only, no viewpoints.")
+        w("  Archaeological / cultural sites are deliberately not included.")
         w("")
 
     w("CAVEATS")

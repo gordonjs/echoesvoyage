@@ -1,6 +1,6 @@
 SW HELICOPTER LANDING-STATUS OVERLAYS FOR FOREFLIGHT
 CO / UT / NM / AZ / NV   -   raster PNG MBTiles, z6-13
-Built 2026-10-05 17:44 UTC, source mode: authoritative
+Built 2026-10-06 01:51 UTC, source mode: authoritative
 
 FILES
 -----
@@ -14,6 +14,11 @@ SW_CallFirst.mbtiles   38.7 MB   classes e, f
     name='SW Call-First' format=png type=overlay zoom 6-13
     bounds=-120.00647,31.33216,-102.04152,42.00184   63,204 tiles, 58,477 unique images
 preview_<product>.png, preview_all.png - z7 mosaics of the tiles over state outlines
+SW_Heli_ContentPack.zip   58.7 MB   ForeFlight content pack:
+    the three overlays + one POI map layer per category (KMZ) +
+    navdata/user_waypoints.csv (every POI as a searchable user waypoint)
+SW_POI.csv - every POI with landing class, nearest landable BLM, elevation, flags
+preview_POI.png - POIs over the faded landing classes
 
 CLASSES (no overlaps; earlier class wins)
 -----------------------------------------
@@ -65,6 +70,17 @@ SOURCES
     https://www.arcgis.com/sharing/rest/content/items/6bf2e737c59d4111be92420ee5ab0b46/data
     layer SMA_WM.gdb/SurfaceManagementAgency
     364 features in 5-state envelope; downloaded 2026-10-05T16:46:27Z
+* USGS GNIS Domestic Names (state text files)
+    version: published 20260929
+    used for: POIs: Falls, Arch, Pillar, hot/warm Spring, Crater, Lava, Glacier, volcanic Summit
+    https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/DomesticNames/DomesticNames_<ST>_Text.zip
+    downloaded 2026-10-06T00:40:09Z
+* OpenStreetMap data via the Overture Maps base theme (water / land / infrastructure)
+    version: Overture release 2026-09-23.1
+    used for: POIs: waterfalls, hot springs, volcanic, glaciers, viewpoints
+    license: ODbL 1.0 - (c) OpenStreetMap contributors
+    https://overturemaps-us-west-2.s3.amazonaws.com/release/2026-09-23.1/theme=base/
+    downloaded 2026-10-06T01:43:28Z
 
 SOURCE HANDLING NOTES
 ---------------------
@@ -129,6 +145,26 @@ VALIDATION
         c: state 0.0   private 0.0
         d: state 954.8   private 545.7
   Overlap between classes: 1324.3 m2 (Mercator) across 40,326 touching pairs - snap-rounding noise only
+
+POINTS OF INTEREST
+------------------
+Waypoint IDs: WF waterfall, AR arch, HD hoodoo/pillar, HS hot spring,
+VC crater/volcanic, GL glacier, VP viewpoint + 4 digits. Icon centre colour =
+category; icon ring colour = landing class at the point (grey = NPS, DoD,
+private or other). Tap a POI for: land-here status, nearest landable BLM
+(distance, true bearing, ground elevation, position), POI ground elevation
+(USGS 3DEP), and flags (NPS 36 CFR 2.17, AC 91-36D 2,000 ft AGL request,
+Grand Canyon SFRA, DoD land).
+  category      total  landable  call1st  no-land  no-go  other  median nm to landable / share within 2 nm
+  arch            441        70       29      170    149     23    2.8 nm / 46%
+  glacier          22         0        2       17      1      2    6.7 nm / 5%
+  hoodoo          508        78       78      129    114    109    3.0 nm / 48%
+  hot_spring      332        50       40       34     18    190    0.7 nm / 68%
+  viewpoint      1175       199      253      185    301    237    3.9 nm / 45%
+  volcanic        125        16       49       23     15     22    6.4 nm / 26%
+  waterfall       303        14       95      114     30     50    5.1 nm / 23%
+  by source: {'GNIS': 1287, 'GNIS+OSM': 168, 'OSM': 1451}
+  Archaeological / cultural sites are deliberately not included.
 
 CAVEATS
 -------
