@@ -178,7 +178,7 @@ between firmware versions, so go by the *names* below.
 | Menu → setting | Set it to | Why |
 |---|---|---|
 | **Bluetooth** (in the main or System menu) | **Classic** (SPP), not BLE | Windows makes COM ports only for Classic. |
-| **Base / Rover** | **Rover** | The SETUP button can switch to Base by accident. Rover is what you want. |
+| **Base / Rover** | **Rover** | Your Surveyor has a physical **Base/Rover switch**: it must be on **Rover**. On Base it reports one fixed position that never moves and never reaches RTK FIX. |
 | **GNSS Receiver → Message rate / NMEA messages** | **GGA, RMC, GST** on (GSA and GSV may also be on) | GGA is your position, RMC your heading, **GST your real accuracy**. Without GST the app can only estimate accuracy. |
 | **GNSS Receiver → Measurement rate** | **4 Hz** (0.25 s) | Smooth updates; 1 Hz also works. |
 | **GNSS Receiver → Dynamic model** | **Pedestrian** or **Portable** | Either is fine for walking. |
@@ -493,6 +493,7 @@ Your settings, password, calibration and saved points are never touched by updat
 | **Corrections streaming, but stuck on GPS** | The mountpoint is probably SPARTN. Use **NEAR-RTCM** (D1). |
 | **Stuck on RTK FLOAT** | Move away from trees and buildings and give it 2–3 minutes. Hold the pole upright. |
 | **"Can't reach Parcel RTK on the laptop"** | The black window was closed. Start it again from the desktop icon. |
+| **Coordinates never change, stuck on DGPS** | The Surveyor's **Base/Rover switch** is on Base. Set it to **Rover**; within a minute or two you should see FLOAT, then FIX. |
 | **Accuracy says "(estimated)"** | Turn on the GST message in the Surveyor (B2). |
 | **Map is blank** | You're offline in an area you haven't viewed before (see Offline maps). The outline still works. |
 | **Outline sits a few feet off the photo** | Normal; the photos themselves are off. Measure monuments (Part E). |

@@ -156,6 +156,13 @@ Set `SHOTS=dir` to get screenshots. Read them before saying UI work is done.
 - Web Serial (a direct receiver connection without the bridge) carries no corrections.
 - Elevations are the receiver's MSL (its geoid model). The project stores ellipsoid height
   `h` with measurements.
+## Future plan (next revision — the user will add more items)
+- **Frozen-position warning.** If the receiver reports a valid fix but lat/lon stay identical
+  (to 1e-8°) for ~30 s, show a banner: "Receiver may be in Base mode — set the switch to
+  Rover." Real case (Oct 2026): the user's Surveyor has a physical Base/Rover switch; on Base
+  it kept sending one fixed position (DGPS, HDOP 99.99) while corrections streamed fine, and
+  never got RTK FIX. Add a Status-card hint as well and cover it in tests/browser_smoke.js.
+
 - Possible next steps:
   - fence-line offsets (stake a line parallel to the boundary);
   - importing a surveyor's corner coordinates as control;
