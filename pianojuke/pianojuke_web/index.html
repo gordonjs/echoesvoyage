@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PianoJuke</title>
+<meta name="description" content="Jukebox for the player piano">
+<meta name="theme-color" content="#0c0d10">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PianoJuke">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/app.css?v=__V__">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-now" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-browse" viewBox="0 0 24 24"><path d="M4 6h16M4 12h8M4 18h6"/><circle cx="16.5" cy="15.5" r="3.5"/><path d="m19 18 2.5 2.5"/></symbol>
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h13M4 11h13M4 16h7"/><path d="M17 14v7M13.5 17.5h7"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5.5 15 12 5 18.5z" fill="currentColor"/><path d="M19 5.5v13"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5 19.5 12 7 19.5z" fill="currentColor"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 4h4v4M4 20 20 4M20 16v4h-4M14.5 14.5 20 20M4 4l5 5"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.4A5 5 0 0 1 12 6.6a5 5 0 0 1 9.3 4.5C19.5 15.9 12 20.5 12 20.5z"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="rail" aria-label="Screens">
+    <button data-nav="now" aria-current="page"><svg class="ic"><use href="#i-now"/></svg>Playing</button>
+    <button data-nav="browse"><svg class="ic"><use href="#i-browse"/></svg>Browse</button>
+    <button data-nav="queue"><svg class="ic"><use href="#i-queue"/></svg>Queue<span class="badge" id="rail-queue" hidden></span></button>
+    <button data-nav="settings"><svg class="ic"><use href="#i-settings"/></svg>Settings</button>
+    <div class="rail-foot">
+      <button class="rail-small" data-action="fullscreen" id="fs-btn" hidden><svg class="ic"><use href="#i-full"/></svg>Full</button>
+      <div class="rail-clock" id="rail-clock"></div>
+      <div class="conn" id="conn" title="Connection"></div>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Now Playing -->
+    <section class="screen" data-screen="now" id="screen-now">
+      <div class="chips" id="np-chips"></div>
+      <div class="np-meta">
+        <div class="np-composer" id="np-composer"></div>
+        <h1 class="np-title" id="np-title">Connecting…</h1>
+        <div class="np-sub" id="np-sub"></div>
+      </div>
+      <div class="np-progress" id="np-progress" hidden>
+        <div class="np-bar"><div class="np-fill" id="np-fill"></div></div>
+        <div class="np-times"><span class="el" id="np-elapsed">0:00</span><span id="np-remaining"></span></div>
+      </div>
+      <div class="np-gap" id="np-gap" hidden>
+        <span id="np-gap-text"></span>
+        <button class="btn primary" data-action="skip"><svg class="ic"><use href="#i-play"/></svg>Play now</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="np-controls">
+        <button class="btn big danger" data-action="stop"><svg class="ic"><use href="#i-stop"/></svg>Stop</button>
+        <button class="btn big" data-action="skip" id="np-skip"><svg class="ic"><use href="#i-skip"/></svg>Skip</button>
+        <button class="btn big grow" data-action="rotation" id="np-rotation" aria-pressed="false"><svg class="ic"><use href="#i-shuffle"/></svg><span id="np-rotation-label">Rotation off</span></button>
+        <button class="btn big icon" data-action="fav-current" id="np-fav" aria-label="Favorite" aria-pressed="false"><svg class="ic heart"><use href="#i-heart"/></svg></button>
+        <button class="btn big icon" data-action="never-current" id="np-never" aria-label="Never play this again"><svg class="ic"><use href="#i-ban"/></svg></button>
+      </div>
+      <div class="np-volume">
+        <span class="lbl">Volume</span>
+        <button class="btn icon" data-action="vol-down" aria-label="Quieter"><svg class="ic"><use href="#i-minus"/></svg></button>
+        <input type="range" id="np-vol" min="0" max="100" step="1" value="70" aria-label="Volume">
+        <button class="btn icon" data-action="vol-up" aria-label="Louder"><svg class="ic"><use href="#i-plus"/></svg></button>
+        <span class="val" id="np-vol-value">70</span>
+      </div>
+      <div class="np-next" id="np-next"></div>
+    </section>
+
+    <!-- Browse -->
+    <section class="screen" data-screen="browse" id="screen-browse">
+      <div class="browse-top">
+        <label class="search">
+          <svg class="ic"><use href="#i-search"/></svg>
+          <input id="search" type="search" placeholder="Search composer or title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+          <button class="btn icon flat" data-action="search-clear" id="search-clear" aria-label="Clear search" hidden><svg class="ic"><use href="#i-x"/></svg></button>
+        </label>
+        <div class="seg" id="filter" role="group" aria-label="Filter">
+          <button data-filter="all" class="on">All</button>
+          <button data-filter="fav"><svg class="ic heart"><use href="#i-heart"/></svg>Favorites</button>
+          <button data-filter="never"><svg class="ic"><use href="#i-ban"/></svg>Never</button>
+        </div>
+      </div>
+      <div class="browse-body">
+        <ul class="composers" id="composers"></ul>
+        <div class="pieces-col">
+          <div class="pieces-head" id="pieces-head"></div>
+          <ul class="pieces" id="pieces"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Queue -->
+    <section class="screen" data-screen="queue" id="screen-queue">
+      <div class="two-col">
+        <div class="col">
+          <div class="col-head"><h2>Up next</h2><button class="btn" data-action="queue-clear" id="q-clear">Clear queue</button></div>
+          <ol class="rows" id="queue"></ol>
+          <p class="after" id="q-after"></p>
+        </div>
+        <div class="col">
+          <div class="col-head"><h2>Recently played</h2></div>
+          <ul class="rows" id="history"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="screen" data-screen="settings" id="screen-settings">
+      <div class="cards">
+        <div class="card">
+          <h2>Rotation</h2>
+          <div class="row"><div class="lbl">Endless shuffle<small>No repeats until the whole library has played</small></div>
+            <button class="switch" role="switch" data-action="rotation" id="set-rotation" aria-checked="false" aria-label="Rotation"></button></div>
+          <div class="row"><div class="lbl">Gap between pieces</div>
+            <div class="stepper" data-setting="gap_seconds" data-kind="gap"><button class="btn icon" data-step="-1" aria-label="Less"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="More"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+          <div class="row"><div class="lbl">Favorites per cycle<small>Up to this many plays per cycle, spaced out. 1 = once, like everything else</small></div>
+            <div class="stepper" data-setting="favorite_weight" data-kind="weight"><button class="btn icon" data-step="-1" aria-label="Less"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="More"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+          <div class="row"><div class="lbl">This cycle<small id="set-cycle"></small></div>
+            <button class="btn" data-action="cycle-reset">Start over</button></div>
+        </div>
+
+        <div class="card">
+          <h2>Quiet hours</h2>
+          <div class="row"><div class="lbl">Pause rotation<small>Pieces you start yourself still play</small></div>
+            <button class="switch" role="switch" data-setting="quiet_enabled" aria-checked="false" aria-label="Quiet hours"></button></div>
+          <div class="row"><div class="lbl">From</div>
+            <div class="stepper" data-setting="quiet_start" data-kind="time"><button class="btn icon" data-step="-1" aria-label="Earlier"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="Later"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+          <div class="row"><div class="lbl">Until</div>
+            <div class="stepper" data-setting="quiet_end" data-kind="time"><button class="btn icon" data-step="-1" aria-label="Earlier"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="Later"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Night volume limit</h2>
+          <div class="row"><div class="lbl">Cap loudness<small>Applies to everything that plays in this window</small></div>
+            <button class="switch" role="switch" data-setting="night_enabled" aria-checked="false" aria-label="Night volume limit"></button></div>
+          <div class="row"><div class="lbl">From</div>
+            <div class="stepper" data-setting="night_start" data-kind="time"><button class="btn icon" data-step="-1" aria-label="Earlier"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="Later"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+          <div class="row"><div class="lbl">Until</div>
+            <div class="stepper" data-setting="night_end" data-kind="time"><button class="btn icon" data-step="-1" aria-label="Earlier"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="Later"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+          <div class="row"><div class="lbl">Loudest note<small>MIDI velocity, out of 127</small></div>
+            <div class="stepper" data-setting="night_ceiling" data-kind="ceiling"><button class="btn icon" data-step="-1" aria-label="Softer"><svg class="ic"><use href="#i-minus"/></svg></button><output></output><button class="btn icon" data-step="1" aria-label="Louder"><svg class="ic"><use href="#i-plus"/></svg></button></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Piano</h2>
+          <div class="row"><div class="lbl">MIDI output<small id="set-midi"></small></div><span class="dot" id="set-midi-dot"></span></div>
+          <div class="row"><div class="lbl">Stuck note or pedal?<small>Lifts every pedal and silences every note</small></div>
+            <button class="btn" data-action="panic">All notes off</button></div>
+          <div class="row"><div class="lbl">Library<small id="set-library"></small></div>
+            <button class="btn" data-action="rescan">Rescan</button></div>
+          <div class="row"><div class="lbl">Softest note<small>Volume never scales a note below this velocity</small></div><span class="value" id="set-minvel"></span></div>
+          <div class="row"><div class="lbl">Clock on the Pi<small>Quiet hours and the night limit follow this clock</small></div><span class="value" id="set-clock"></span></div>
+        </div>
+
+        <div class="card">
+          <h2>Never-play list</h2>
+          <ul class="rows compact" id="set-never"></ul>
+        </div>
+
+        <div class="card">
+          <h2>This tablet</h2>
+          <div class="row"><div class="lbl">Fullscreen on first tap</div>
+            <button class="switch" role="switch" data-local="autoFullscreen" aria-checked="true" aria-label="Fullscreen on first tap"></button></div>
+          <div class="row"><div class="lbl">Back to Now Playing<small>After 3 minutes untouched on another screen</small></div>
+            <button class="switch" role="switch" data-local="autoHome" aria-checked="true" aria-label="Back to Now Playing"></button></div>
+          <p class="hint" id="install-hint"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="offline" class="offline" hidden><svg class="ic"><use href="#i-alert"/></svg><span>Can't reach the piano. Retrying…</span></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/static/app.js?v=__V__"></script>
+</body>
+</html>
