@@ -47,7 +47,7 @@ async function newPage(browser, opts, seed) {
   if (seed) await ctx.addInitScript(v1 => { if (!localStorage.getItem('parcelRTK.v2')) localStorage.setItem('parcelRTK', JSON.stringify(v1)); }, V1);
   const page = await ctx.newPage();
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('[console] ' + m.text()); });
-  page.on('response', r => { if (r.status() >= 400 && !/\/tiles\//.test(r.url())) errors.push('[http ' + r.status() + '] ' + r.url()); });
+  page.on('response', r => { if (r.status() >= 400 && !/\/tiles\/|\/api\/version$/.test(r.url())) errors.push('[http ' + r.status() + '] ' + r.url()); });
   page.on('pageerror', e => errors.push('[pageerror] ' + e.message));
   return page;
 }
@@ -260,6 +260,26 @@ async function tab(page, name) {
     const fk = await app(fp, () => PRTK.app.sol.kind);
     check(fk === 'rough', 'place the outline by hand in file mode');
     await shot(fp, '14-file-mode.png');
+
+    // ---------------------------------------------------------------- served from a plain website (no bridge)
+    console.log('10b. served from a plain website (e.g. GitHub Pages)');
+    const wport = await freePort();
+    const web = spawn(PYTHON, ['-m', 'http.server', String(wport), '--bind', '127.0.0.1', '--directory', path.join(run, 'web')]);
+    for (let i = 0; i < 40; i++) { try { if ((await fetch(`http://127.0.0.1:${wport}/index.html`)).ok) break; } catch (e) { /* not up */ } await sleep(150); }
+    const wp = await newPage(browser, { viewport: { width: 390, height: 844 } }, false);
+    await wp.goto(`http://127.0.0.1:${wport}/index.html`);
+    await wp.waitForFunction(() => PRTK.app && PRTK.app.map, null, { timeout: 8000 });
+    await sleep(5000);                                                   // past the 4 s "can't reach the laptop" window
+    const wv = await app(wp, () => ({ mode: PRTK.app.bridgeMode, banner: document.querySelector('#banner').textContent,
+      tile: (() => { let u = ''; PRTK.app.map.eachLayer(l => { if (l instanceof L.TileLayer) u = l._url; }); return u; })() }));
+    check(wv.mode === false && !/reach|connection/i.test(wv.banner), 'plain website: no bridge expected, no laptop warning (' + wv.banner + ')');
+    check(/^https:\/\/server\.arcgisonline\.com\//.test(wv.tile), 'plain website: satellite tiles load straight from Esri (' + wv.tile.slice(0, 60) + ')');
+    await tab(wp, 'calib');
+    await wp.click('[data-pane="calib"] [data-act="adjust"]');
+    await sleep(500);
+    check(await app(wp, () => PRTK.app.sol.kind) === 'rough', 'plain website: place the outline by hand');
+    await shot(wp, '14b-website.png');
+    web.kill();
 
     // ---------------------------------------------------------------- demo walk (no receiver in file mode)
     await app(fp, () => { PRTK.app.stopAdjust(); PRTK.app.startDemo(); });

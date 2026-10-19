@@ -50,7 +50,7 @@ import urllib.request
 import webbrowser
 import zipfile
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 APP_ID = "parcel-rtk"
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")

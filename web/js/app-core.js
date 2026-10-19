@@ -15,11 +15,22 @@
   const P = window.PRTK, A = P.app = P.app || {};
   const ST = P.state, calib = P.calib, nmea = P.nmea, geo = P.geo, locate = P.locate;
 
-  A.VERSION = '2.0.0';
+  A.VERSION = '2.0.1';
   A.model = P.model.build(P.data);
   A.K = geo.US_FT;                       // metres per US survey foot
   A.FT = 1 / geo.US_FT;                  // US survey feet per metre
-  A.bridgeMode = /^https?:$/.test(location.protocol);
+  // Served by the bridge on the laptop? Decided at start-up by A.detectBridge(): the same page
+  // also runs as a file or from a plain website (map + hand placement only, data in this browser).
+  A.bridgeMode = false;
+  A.detectBridge = function () {
+    if (!/^https?:$/.test(location.protocol)) return Promise.resolve(false);
+    const ctl = window.AbortController ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 2500);
+    return fetch('api/version', { cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => !!(j && j.app === 'parcel-rtk'), () => false)
+      .then(on => { clearTimeout(timer); A.bridgeMode = on; return on; });
+  };
 
   // ------------------------------------------------------------------ tiny event bus
   const handlers = {};

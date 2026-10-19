@@ -56,6 +56,12 @@ web/js/app-panels.js  Status / Calibrate / Points / Tools / Settings, measure & 
 web/js/app.js      live rendering, the data-act dispatcher, start-up
 web/vendor/        Leaflet 1.9.4, qrcode-generator 2.0.4 (MIT)
 ```
+**Three ways the same page runs.** At start-up `A.detectBridge()` asks `api/version`:
+1. From the bridge: live receiver, laptop project, cached tiles.
+2. From a plain website (GitHub Pages: https://gordonjs.github.io/echoesvoyage/): map, hand
+   placement and spot checks, with data in that browser only.
+3. As a file (`file://`): the same as a plain website.
+
 The math modules are UMD and run in node too, which is how the tests use them. The app
 files are classic scripts sharing `PRTK.app`; no ES modules, so `file://` keeps working.
 

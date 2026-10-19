@@ -468,7 +468,8 @@
   A.on('serial', () => { A.renderPane('tools'); A.scheduleRender(); });
 
   // ------------------------------------------------------------------ start
-  function init() {
+  async function init() {
+    await A.detectBridge();            // decides tiles (laptop cache or direct), sync and the receiver link
     A.startT = Date.now();
     A.initMap();
     bind();

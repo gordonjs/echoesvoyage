@@ -74,7 +74,7 @@
     let src = '', state = null, hint = '';
     if (A.demo) src = 'Demo walk (simulated)';
     else if (A.serial) src = 'Direct connection in this browser';
-    else if (!A.bridgeMode) { src = 'None'; hint = 'Opened as a file, so there is no bridge. Start Parcel RTK on the laptop (python rtk_bridge.py), or use Tools → connect a receiver directly.'; }
+    else if (!A.bridgeMode) { src = 'None'; hint = 'This copy isn\'t running from the laptop program, so there is no receiver. For live position, start Parcel RTK on the laptop (python rtk_bridge.py). The map, hand placement and spot checks work here.'; }
     else if (!b.connected) { src = 'Laptop not reachable'; hint = 'Waiting for the Parcel RTK window on the laptop…'; }
     else if (rx) { src = rxSourceText(rx); state = RX_STATE[rx.state] || [rx.state, 'p-idle']; if (rx.state !== 'open') hint = RX_HINT[rx.state] || rx.detail || ''; }
     const fresh = age < 3;
@@ -192,7 +192,7 @@
       b.hello ? ['Laptop bridge', esc(b.hello.version) + (b.hello.version !== A.VERSION ? ' <span class="warn">(different version — reload)</span>' : '')] : null,
       st ? ['Viewers', esc(st.viewers)] : null,
       st ? ['Bridge running', dur(st.upSec)] : null,
-      A.bridgeMode ? ['Connection', b.connected ? '<span class="good-t">connected</span>' : '<span class="bad">reconnecting…</span>'] : ['Storage', 'this browser only (opened as a file)'],
+      A.bridgeMode ? ['Connection', b.connected ? '<span class="good-t">connected</span>' : '<span class="bad">reconnecting…</span>'] : ['Storage', 'this browser only (not the laptop\'s project)'],
       A.pending.length ? ['Unsynced edits', '<span class="warn">' + A.pending.length + ' (sent when the laptop is reachable)</span>'] : null
     ]);
   }
@@ -411,7 +411,7 @@
     const b = A.bridge, cfg = b.cfg;
     let html = displayCard();
     if (!A.bridgeMode) {
-      el.innerHTML = html + '<div class="hint">Receiver and correction settings belong to the bridge on the laptop. Opened as a file, there is none — start it with <span class="mono">python rtk_bridge.py</span>.</div>';
+      el.innerHTML = html + '<div class="hint">Receiver and correction settings belong to the bridge on the laptop. This copy isn\'t running from it — start it there with <span class="mono">python rtk_bridge.py</span>.</div>';
       return;
     }
     if (!cfg || !b.connected) { el.innerHTML = html + '<div class="hint">Connecting to the laptop…</div>'; return; }
