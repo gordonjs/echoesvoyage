@@ -49,10 +49,13 @@
     open: ['Connected', 'p-fix'], probing: ['Searching', 'p-float'], opening: ['Opening', 'p-float'], starting: ['Starting', 'p-float'],
     noport: ['No COM ports', 'p-none'], notfound: ['Not found', 'p-none'], busy: ['Port busy', 'p-none'], missing: ['Port gone', 'p-none'],
     noresponse: ['No answer', 'p-none'], silent: ['Silent', 'p-none'], dropped: ['Reconnecting', 'p-float'], error: ['Error', 'p-none'],
+    nobt: ['Bluetooth off', 'p-none'], nodevice: ['Not paired', 'p-none'],
     off: ['Off', 'p-none'], stopped: ['Stopped', 'p-none']
   };
   const RX_HINT = {
     noport: 'No COM ports at all. Pair the receiver in Windows Bluetooth settings (set the receiver\'s Bluetooth to Classic/SPP), or plug in its USB cable.',
+    nobt: 'Bluetooth is turned off on this tablet.',
+    nodevice: 'No paired receiver. Pair the Surveyor in the tablet\'s Bluetooth settings (its Bluetooth mode set to Classic), then pick it in Settings.',
     notfound: 'No port is sending GPS data. Is the receiver on and in range? Close u-center or other GPS programs that might hold the port.',
     busy: 'Another program has the port open — close old bridge windows, u-center or other GPS apps.',
     missing: 'That COM port is gone. The bridge will look for the receiver on the other ports.',
@@ -74,6 +77,10 @@
     let src = '', state = null, hint = '';
     if (A.demo) src = 'Demo walk (simulated)';
     else if (A.serial) src = 'Direct connection in this browser';
+    else if (A.native) {
+      if (!rx) { src = 'Starting…'; }
+      else { src = 'Bluetooth' + (rx.port ? ' · ' + rx.port : ''); state = RX_STATE[rx.state] || [rx.state, 'p-idle']; if (rx.state !== 'open') hint = RX_HINT[rx.state] || rx.detail || ''; }
+    }
     else if (!A.bridgeMode) { src = 'None'; hint = 'This copy isn\'t running from the laptop program, so there is no receiver. For live position, start Parcel RTK on the laptop (python rtk_bridge.py). The map, hand placement and spot checks work here.'; }
     else if (!b.connected) { src = 'Laptop not reachable'; hint = 'Waiting for the Parcel RTK window on the laptop…'; }
     else if (rx) { src = rxSourceText(rx); state = RX_STATE[rx.state] || [rx.state, 'p-idle']; if (rx.state !== 'open') hint = RX_HINT[rx.state] || rx.detail || ''; }
@@ -97,7 +104,7 @@
   }
   function ntripCard() {
     const b = A.bridge, n = b.status && b.status.ntrip, cfg = b.cfg && b.cfg.ntrip;
-    if (!A.bridgeMode) return '<div class="ttl">Corrections</div><div class="hint">Corrections come through the bridge on the laptop.</div>';
+    if (!A.bridgeMode && !A.native) return '<div class="ttl">Corrections</div><div class="hint">Corrections come through the bridge on the laptop.</div>';
     if (!b.connected) return '<div class="ttl">Corrections</div><div class="hint">Waiting for the laptop…</div>';
     if (!n) {
       return `<div class="ttl">Corrections ${pill('Off', 'p-idle')}</div><div class="hint">${cfg && cfg.enabled ? 'Turned on but the caster, mountpoint or login is missing.' : 'Not set up.'}
@@ -149,6 +156,7 @@
   const qrCache = {};
   function lanCard() {
     const h = A.bridge.hello;
+    if (A.native) return '<div class="hint">On the tablet the app runs on its own; a phone can\'t view it. Use the laptop for that.</div>';
     if (!A.bridgeMode) return '<div class="hint">Run the bridge on the laptop to use a phone as a second screen.</div>';
     if (!h) return '<div class="hint">Waiting for the laptop…</div>';
     if (!h.local) return `<div class="hint">You're viewing from another device. Settings can only be changed on the laptop.</div>`;
@@ -189,9 +197,11 @@
     const b = A.bridge, st = b.status;
     return kv([
       ['App', 'Parcel RTK ' + esc(A.VERSION)],
-      b.hello ? ['Laptop bridge', esc(b.hello.version) + (b.hello.version !== A.VERSION ? ' <span class="warn">(different version — reload)</span>' : '')] : null,
+      b.hello && !b.hello.native ? ['Laptop bridge', esc(b.hello.version) + (b.hello.version !== A.VERSION ? ' <span class="warn">(different version — reload)</span>' : '')] : null,
+      A.native ? ['Android app', esc(A.native.version)] : null,
       st ? ['Viewers', esc(st.viewers)] : null,
       st ? ['Bridge running', dur(st.upSec)] : null,
+      A.native ? ['Storage', 'this tablet (export it from Settings to back it up)'] :
       A.bridgeMode ? ['Connection', b.connected ? '<span class="good-t">connected</span>' : '<span class="bad">reconnecting…</span>'] : ['Storage', 'this browser only (not the laptop\'s project)'],
       A.pending.length ? ['Unsynced edits', '<span class="warn">' + A.pending.length + ' (sent when the laptop is reachable)</span>'] : null
     ]);
@@ -352,7 +362,8 @@
         <select class="inp" id="tStake">${stakeOptions()}</select>
         <div class="row"><button class="btn small primary" data-act="stakesel">${A.stake ? 'Switch to this line' : 'Start'}</button>
           ${A.stake ? '<button class="btn small" data-act="stakestop">Stop</button>' : ''}</div>
-        <div class="hint">Shows how far left or right of the line you are and how far along it — for setting fence posts or flagging the line. Tip: tap a line on the map to pick it.</div></div></div>
+        <div class="hint">Shows how far left or right of the line you are and how far along it — for setting fence posts or flagging the line. Tip: tap a line on the map to pick it.
+        <b>Fence offset:</b> on the stake card, use −1 ft / +1 ft to stake a line that many feet inside your land, so the fence is clearly yours.</div></div></div>
       <div class="sec"><h3>Property-line alert</h3><div class="card">
         <select class="inp" data-chg="setting" data-key="edgeAlertFt" data-num="1">${alerts.map(a => `<option value="${a}" ${+set.edgeAlertFt === a ? 'selected' : ''}>${a ? 'Within ' + a + ' ft of my line' : 'Off'}</option>`).join('')}</select>
         <div class="row"><button class="btn small" data-act="testalert">Test sound</button></div>
@@ -367,7 +378,7 @@
       <div class="sec"><h3>Demo</h3><div class="card">
         <button class="btn small" data-act="${A.demo ? 'demostop' : 'demo'}">${A.demo ? 'Stop demo' : 'Start demo walk'}</button>
         <div class="hint">Pretends to walk the 35-acre line, weaving in and out, so you can see how the app responds. Runs only when no receiver is sending data.</div></div></div>
-      ${A.serialSupported ? `<div class="sec"><h3>Receiver without the bridge</h3><div class="card">
+      ${A.serialSupported && !A.native ? `<div class="sec"><h3>Receiver without the bridge</h3><div class="card">
         <button class="btn small" data-act="serial">${A.serial ? 'Disconnect receiver' : 'Connect a receiver directly…'}</button>
         <div class="hint">For a receiver on USB when the bridge isn't running. No RTK corrections this way — the bridge is the better option.</div></div></div>` : ''}`;
   };
@@ -400,6 +411,28 @@
         ${A.BASE_ORDER.map(k => `<option value="${k}" ${set.base === k ? 'selected' : ''}>${k === 'none' ? 'No map (fastest)' : esc(A.BASES[k].name)}</option>`).join('')}</select></label>
       <div class="hint">Shared by everyone using this project.</div></div></div>`;
   }
+  function setbackCard() {
+    const SB = P.setback, c = SB.conf(A.proj.settings);
+    const parcel = (rid, label) => {
+      const p = c.parcels[rid], custom = p.zone === 'custom';
+      const num = k => `<label class="f" style="flex:1"><span>${k[0].toUpperCase() + k.slice(1)} (ft)</span>
+        <input class="inp" inputmode="numeric" data-chg="setting" data-num="1" data-path="setbacks.parcels.${rid}.${k}" value="${esc(p[k])}" ${custom ? '' : 'readonly'}></label>`;
+      return `<div class="card"><div class="ttl">${esc(label)}</div>
+        <label class="f"><span>Zone district</span><select class="inp" data-act-change="sbzone" data-id="${rid}">
+          ${Object.keys(SB.ZONES).map(z => `<option value="${z}" ${z === p.zone ? 'selected' : ''}>${esc(SB.ZONES[z].name)}</option>`).join('')}</select></label>
+        <div class="row">${num('front')}${num('side')}${num('rear')}</div>
+        <div class="hint">${custom ? 'Enter the numbers from the county.' : 'From the Jefferson County ' + esc(SB.ZONES[p.zone].source) + '. Choose Custom to type your own.'}</div></div>`;
+    };
+    return `<div class="sec"><h3>Setbacks</h3>
+      <div class="card"><label class="check"><input type="checkbox" data-chg="setting" data-path="setbacks.show" ${c.show ? 'checked' : ''}> Show setback zones on the map</label>
+        <div class="hint">The shaded band inside your line is where a building isn't allowed. The grey band outside it is your neighbor's setback.
+        The road frontage counts as the front; every other line as a side. Tap a line on the map to mark it front, side or rear.
+        <b>Verify the distances with Jefferson County Planning &amp; Zoning (303-271-8700)</b> before you build — a plat note or an amendment can change them.</div></div>
+      ${parcel('P1', '35-acre parcel')}${parcel('LOT1', 'Lot 1')}
+      <div class="card"><label class="f"><span>Neighbor's side setback across your line (ft)</span>
+        <input class="inp" inputmode="numeric" data-chg="setting" data-num="1" data-path="setbacks.neighborFt" value="${esc(c.neighborFt)}"></label>
+        <div class="hint">Assumed MR-1 (Black Mountain Ranch Estates). Across the Lodgepole Pines lines the neighbor's setback is taken to be the same as Lot 1's.</div></div></div>`;
+  }
   function portOptions(cur) {
     const kinds = { 'bt-out': 'Bluetooth — outgoing (use this)', 'bt-in': 'Bluetooth — incoming (not this)', usb: 'USB', other: '' };
     const list = (A.ports || []).slice();
@@ -409,7 +442,8 @@
   }
   panes.settings = function (el) {
     const b = A.bridge, cfg = b.cfg;
-    let html = displayCard();
+    let html = displayCard() + setbackCard();
+    if (A.native) { el.innerHTML = html + A.native.settingsHtml(); A.setCfgDirty(false); return; }
     if (!A.bridgeMode) {
       el.innerHTML = html + '<div class="hint">Receiver and correction settings belong to the bridge on the laptop. This copy isn\'t running from it — start it there with <span class="mono">python rtk_bridge.py</span>.</div>';
       return;
@@ -480,6 +514,7 @@
       A.$('#cfBaudBox').hidden = t.value === 'tcp' || t.value === 'test';
       if (t.value === 'port' && !A.ports) A.listPorts();
     }
+    if (t.id === 'cfPreset' && e.type === 'change' && A.native) { A.native.onPreset(t.value); return; }
     if (t.id === 'cfPreset' && e.type === 'change') {
       const p = PRESETS[t.value];
       A.$('#cfPresetHint').innerHTML = p.hint;

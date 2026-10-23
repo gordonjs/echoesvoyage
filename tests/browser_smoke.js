@@ -281,6 +281,54 @@ async function tab(page, name) {
     await shot(wp, '14b-website.png');
     web.kill();
 
+    // ---------------------------------------------------------------- inside the Android app (a stand-in shell)
+    console.log('10c. inside the Android app (stand-in for window.PRTKNative)');
+    const np = await newPage(browser, { viewport: { width: 800, height: 1280 } }, false);
+    await np.addInitScript(() => {
+      window.__native = { calls: [], cfg: { source: { type: 'bluetooth', device: 'Surveyor Rover-1A2B' }, ntrip: { enabled: true, host: 'ppntrip.services.u-blox.com', port: 2101, mount: 'NEAR-RTCM', user: 'abc', pass: '', passSet: true, ggaInterval: 10 } } };
+      window.PRTKNative = {
+        version: () => '2.1.0',
+        ready: () => { window.__native.calls.push('ready'); setTimeout(() => PRTK.app.native.onConfig(window.__native.cfg, [{ name: 'Surveyor Rover-1A2B', address: 'AA:BB' }]), 10); },
+        setConfig: j => { window.__native.calls.push('setConfig'); window.__native.lastCfg = JSON.parse(j); },
+        refreshDevices: () => {}, getLog: () => JSON.stringify(['12:00:00 [rx] connected to receiver Surveyor Rover-1A2B']),
+        saveFile: (name, text, mime) => { window.__native.saved = { name, mime, len: text.length }; },
+        openProjectFile: () => { window.__native.calls.push('open'); }, keepScreenOn: () => {}, openBluetoothSettings: () => {}
+      };
+    });
+    await np.goto('file://' + path.join(REPO, 'web', 'index.html'));
+    await np.waitForFunction(() => PRTK.app && PRTK.app.native && PRTK.app.native.cfg, null, { timeout: 8000 });
+    // the shell pushes status and NMEA the way the Android code does
+    await np.evaluate(() => {
+      const A = PRTK.app;
+      A.native.onStatus({ t: 'status', rx: { type: 'bluetooth', state: 'open', detail: 'Surveyor Rover-1A2B', nmeaPerSec: 12, badChecksums: 0, txBytes: 5000, port: 'Surveyor Rover-1A2B' },
+                          ntrip: { state: 'streaming', detail: 'x', host: 'ppntrip.services.u-blox.com', mount: 'NEAR-RTCM', bytesPerSec: 700, total: 90000, format: 'RTCM3', types: [1005, 1074], badFrames: 0, base: null, upSec: 30 }, fix: null, viewers: 1 });
+      A.native.onNmea(A.fakeNmea(39.4972, -105.3051, 2640, 4, 0.012));
+    });
+    await sleep(600);
+    const nv = await np.evaluate(() => ({ fix: document.querySelector('#sFix').textContent, mode: PRTK.app.bridgeMode, native: !!PRTK.app.native, calls: window.__native.calls.slice() }));
+    check(nv.native && !nv.mode && nv.fix === 'RTK FIX' && nv.calls.includes('ready'), 'native mode: receiver data flows from the shell ' + JSON.stringify(nv));
+    await tab(np, 'status');
+    await sleep(1200);
+    const nst = await np.textContent('#stRx') + ' ' + await np.textContent('#stNtrip');
+    check(/Bluetooth/.test(nst) && /Streaming/.test(nst), 'native status cards show Bluetooth + Streaming');
+    await tab(np, 'settings');
+    check(await np.inputValue('#cfDevice') === 'Surveyor Rover-1A2B', 'native settings show the paired receiver');
+    await np.fill('#cfUser', 'newuser');
+    await np.click('[data-act="ncfgsave"]');
+    await sleep(300);
+    const nsaved = await np.evaluate(() => window.__native.lastCfg);
+    check(nsaved && nsaved.ntrip.user === "newuser" && nsaved.ntrip.pass === "" && nsaved.source.device === "Surveyor Rover-1A2B", 'native settings saved through the shell (blank password keeps the saved one)');
+    await np.click('[data-act="nexport"]');
+    await sleep(200);
+    const exp = await np.evaluate(() => window.__native.saved);
+    check(exp && exp.name === 'project.json' && exp.len > 20, 'project export goes through the shell\'s file picker');
+    await np.evaluate(() => PRTK.app.native.onProjectFile(JSON.stringify({ schema: 2, rough: null, control: {}, settings: { units: 'm' }, savedPoints: [{ id: 'x1', lat: 39.4972, lon: -105.3051, note: 'from laptop', t: 1 }] })));
+    await sleep(300);
+    await np.click('#cOk');
+    await np.waitForFunction(() => PRTK.app.proj.savedPoints.length === 1 && PRTK.app.proj.settings.units === 'm', null, { timeout: 3000 });
+    check(true, 'project import replaces the tablet project');
+    await shot(np, '17-android-settings.png');
+
     // ---------------------------------------------------------------- demo walk (no receiver in file mode)
     await app(fp, () => { PRTK.app.stopAdjust(); PRTK.app.startDemo(); });
     await sleep(2500);
@@ -338,6 +386,48 @@ async function tab(page, name) {
     check(r.exports.gjPolys === 3 && r.exports.kmlOk && r.exports.csvLines >= 23, 'exports: CSV/GeoJSON/KML well-formed ' + JSON.stringify(r.exports));
     await sleep(400);
     await shot(fp, '15-file-fit.png');
+
+    // ---------------------------------------------------------------- setbacks and fence offset (on the calibrated outline)
+    console.log('12. setbacks and fence offset');
+    const sbr = await fp.evaluate(() => {
+      const A = PRTK.app, M = A.model, C = PRTK.calib, SB = PRTK.setback;
+      const out = { rings: Object.keys(A.sb.rings).filter(r => A.sb.rings[r]), nb: Object.keys(A.sb.neighbor).length };
+      // stand 10 ft inside Lot 1's west line: inside the 30 ft side setback
+      const W = M.points.W16, T = M.points.TPB, L = Math.hypot(T.e - W.e, T.n - W.n);
+      const d = { e: (T.e - W.e) / L, n: (T.n - W.n) / L }, mid = { e: (W.e + T.e) / 2, n: (W.n + T.n) / 2 };
+      const truth = A.sol.placement;
+      const go = ft => { const g = C.local2geo(truth, mid.e + d.n * ft, mid.n - d.e * ft); A.onNmeaLines(A.fakeNmea(g.lat, g.lon, 2640, 4, 0.012), 'test'); A.onNmeaLines(A.fakeNmea(g.lat, g.lon, 2640, 4, 0.012), 'test'); };
+      go(10);
+      out.check10 = SB.check(M, A.proj.settings, A.live.where);
+      go(45);
+      out.check45 = SB.check(M, A.proj.settings, A.live.where);
+      // fence offset: stake l1w, 3 ft into Lot 1, standing exactly 3 ft inside -> on the offset line
+      go(3);
+      document.querySelector('[data-pane="calib"]');
+      return out;
+    });
+    check(sbr.rings.length === 2 && sbr.nb >= 10, 'setback rings for both parcels and neighbor bands drawn ' + JSON.stringify({ rings: sbr.rings, nb: sbr.nb }));
+    check(sbr.check10 && sbr.check10.margin < 0 && sbr.check10.requiredFt === 30, '10 ft inside the west line is in the 30 ft setback zone');
+    check(sbr.check45 && sbr.check45.margin > 0, '45 ft inside is clear');
+    await sleep(300);
+    const edge = await fp.textContent('#edgeText');
+    check(/setback/i.test(edge), 'top line reports the setback: ' + edge);
+    await fp.evaluate(() => { const b = document.createElement('button'); b.dataset.act = 'stake'; b.dataset.id = 'l1w'; document.body.appendChild(b); b.click(); b.remove(); });
+    for (let i = 0; i < 3; i++) await fp.click('[data-act="stakeoff"][data-d="1"]');
+    await sleep(400);
+    const sk2 = await fp.evaluate(() => ({ off: PRTK.app.stake.offFt, big: document.querySelector('#stakeOff').textContent, name: document.querySelector('#stakeName').textContent }));
+    check(sk2.off === 3 && /ON THE OFFSET LINE/.test(sk2.big), "standing 3 ft inside with a 3 ft fence offset -> on the offset line " + JSON.stringify(sk2));
+    await shot(fp, '16-file-setback-stake.png');
+    // zone preset changes the numbers; line type override changes the ring
+    await fp.evaluate(() => { PRTK.app.edit({ op: 'set', path: ['settings', 'setbacks', 'parcels', 'LOT1'], value: { zone: 'MR-1', front: 30, side: 20, rear: 20 } }); });
+    await sleep(300);
+    const mr1 = await fp.evaluate(() => PRTK.setback.check(PRTK.app.model, PRTK.app.proj.settings, PRTK.app.live.where));
+    check(mr1 && mr1.requiredFt === 20, 'MR-1 preset: Lot 1 side setback is now 20 ft');
+    await fp.evaluate(() => { PRTK.app.edit({ op: 'set', path: ['settings', 'setbacks', 'lines', 'l1w', 'type'], value: 'front' }); });
+    await sleep(300);
+    const front = await fp.evaluate(() => PRTK.setback.check(PRTK.app.model, PRTK.app.proj.settings, PRTK.app.live.where));
+    check(front && front.requiredFt === 30 && front.type === 'front', 'marking the west line as front uses the 30 ft front setback');
+    await fp.click('#stakeClose');
   } catch (e) {
     failures++;
     console.log('  FAIL exception: ' + (e.stack || e));

@@ -45,6 +45,11 @@
   <div class="nc-row"><div><div class="nc-title">Staking <b id="stakeName">—</b></div>
     <div class="sk-off" id="stakeOff">—</div><div class="nc-sub" id="stakeSub"></div></div>
     <button class="x" id="stakeClose" title="Stop staking">✕</button></div>
+  <div class="row sk-row"><span class="dim">Fence offset into my land</span>
+    <button class="btn small" data-act="stakeoff" data-d="-1">−1 ft</button>
+    <b id="stakeOffVal" class="mono">0 ft</b>
+    <button class="btn small" data-act="stakeoff" data-d="1">+1 ft</button>
+    <button class="btn small" data-act="stakeoff" data-d="0">Line</button></div>
 </div>
 
 <div id="adjCard" class="card-float" hidden></div>
@@ -88,9 +93,11 @@
 <script src="js/model.js"></script>
 <script src="js/calib.js"></script>
 <script src="js/locate.js"></script>
+<script src="js/setback.js"></script>
 <script src="js/nmea.js"></script>
 <script src="js/state.js"></script>
 <script src="js/app-core.js"></script>
+<script src="js/app-native.js"></script>
 <script src="js/app-map.js"></script>
 <script src="js/app-panels.js"></script>
 <script src="js/app.js"></script>

@@ -52,7 +52,7 @@
     let cls = 'none', big = '—', sub = '';
     if (!A.gm) { big = 'SET UP'; sub = 'place the outline'; }
     else if (!L.gga || age > 15) {
-      sub = A.bridgeMode && !A.bridge.connected && !A.demo && !A.serial ? 'laptop not reachable'
+      sub = A.native ? 'waiting for the receiver' : A.bridgeMode && !A.bridge.connected && !A.demo && !A.serial ? 'laptop not reachable'
         : !A.bridgeMode && !A.demo && !A.serial ? 'no receiver' : 'no position yet';
     } else if (!L.gga.valid) { big = 'NO FIX'; sub = 'receiver has no fix'; }
     else if (w) {
@@ -97,8 +97,11 @@
       arrow.style.transform = 'rotate(' + w.edge.bearing.toFixed(0) + 'deg)';
       let t = A.fmtLen(w.edge.d) + ' to line · ' + lineName(w.edge.segId);
       if (w.inOwned && w.internal && w.internal.d < w.edge.d) t += ' · ' + A.fmtLen(w.internal.d) + ' to your inner line';
-      setText($('#edgeText'), t);
-      $('#edgeText').title = w.edge.name;
+      const sc = P.setback.conf(A.proj.settings).show ? P.setback.check(model, A.proj.settings, w) : null;
+      const html = esc(t) + (sc ? sc.margin < 0 ? `<span class="sb-line sb-in">⚠ Inside the ${sc.requiredFt} ft ${esc(sc.type)} setback by ${esc(A.fmtLen(-sc.margin))} — no building here</span>`
+                                               : `<span class="sb-line sb-ok">Setback clear by ${esc(A.fmtLen(sc.margin))} (${sc.requiredFt} ft ${esc(sc.type)})</span>` : '');
+      if ($('#edgeText').innerHTML !== html) $('#edgeText').innerHTML = html;
+      $('#edgeText').title = w.edge.name + (sc ? ' — ' + sc.requiredFt + ' ft ' + sc.type + ' setback from ' + sc.name : '');
     } else {
       arrow.style.visibility = 'hidden';
       setText($('#edgeText'), A.gm ? 'Waiting for position…' : 'Outline not placed yet');
@@ -117,8 +120,12 @@
     if (A.bridgeMode && !b.connected && (b.everConnected || Date.now() - A.startT > 4000))
       return { key: 'bridge', html: b.everConnected ? 'Lost the connection to the laptop — reconnecting…'
         : 'Can\'t reach Parcel RTK on the laptop. Is its window still open?', btn: ['Retry', 'reconnect'] };
-    if (b.hello && b.hello.version !== A.VERSION)
+    if (b.hello && !b.hello.native && b.hello.version !== A.VERSION)
       return { key: 'ver', cls: 'info', html: 'Parcel RTK was updated on the laptop.', btn: ['Reload', 'reload'] };
+    if (A.native && rx && rx.state !== 'open' && !A.demo) {
+      const soft = { opening: 'Connecting to the receiver…', starting: 'Starting the receiver link…', dropped: 'Receiver link dropped — reconnecting…' }[rx.state];
+      return { key: 'rx', cls: soft ? 'info' : '', html: soft || 'Receiver: ' + esc(rx.detail || rx.state), btn: ['Settings', 'tab', 'settings'] };
+    }
     if (rx && rx.state !== 'open' && !A.demo && !A.serial) {
       const soft = { probing: 'Looking for the receiver…', opening: 'Opening the receiver port…', starting: 'Starting the receiver link…',
                      dropped: 'Receiver link dropped — reconnecting…' }[rx.state];
@@ -194,10 +201,13 @@
   }
 
   // ------------------------------------------------------------------ stake out a line
-  A.stake = null;                     // {segId}
+  A.stake = null;                     // {segId, offFt}
   function startStake(id) {
     if (!A.gm || !model.segments[id]) { A.toast('Place the outline first', true); return; }
-    A.stake = { segId: id };
+    A.stake = { segId: id, offFt: A.stake && A.stake.segId === id ? A.stake.offFt : 0 };
+    if (model.segments[id].role !== 'boundary') A.stake.offFt = 0;
+    setText($('#stakeOffVal'), A.stake.offFt + ' ft');
+    $('#stakeCard .sk-row').hidden = model.segments[id].role !== 'boundary';
     A.nav = null; A.drawNav(null); A.stopAdjust();
     A.closePopup(); A.closePanelOnMobile();
     A.renderPane('tools');
@@ -214,23 +224,26 @@
     const card = $('#stakeCard');
     if (!A.stake || !A.gm) { if (!card.hidden) card.hidden = true; A.drawStake(null); return; }
     card.hidden = false;
-    const id = A.stake.segId, L0 = A.live;
-    setText($('#stakeName'), A.segLabel(id));
+    const id = A.stake.segId, L0 = A.live, offM = (A.stake.offFt || 0) * A.K;
+    setText($('#stakeName'), A.segLabel(id) + (offM ? ' (' + A.stake.offFt + ' ft in)' : ''));
     const off = $('#stakeOff');
     if (!L0.xy || A.fixAge() > 15) {
       setText(off, '—'); off.classList.remove('on'); setText($('#stakeSub'), 'waiting for position');
-      A.drawStake(id, null);
+      A.drawStake(id, null, offM);
       return;
     }
-    const r = locate.stakeout(model, A.gm, id, L0.xy.x, L0.xy.y), d = Math.abs(r.offset);
+    const r = locate.stakeout(model, A.gm, id, L0.xy.x, L0.xy.y);
+    // the target is the line itself, or a line offM into your land
+    const target = offM ? P.setback.ownedSide(model, A.gm, id) * offM : 0;
+    const rel = r.offset - target, d = Math.abs(rel);
     const on = d < Math.max(0.03, L0.sigma || 0);
-    setText(off, on ? 'ON THE LINE' : r.offset > 0 ? '◀ ' + A.fmtLen(d) : A.fmtLen(d) + ' ▶');
+    setText(off, on ? (offM ? 'ON THE OFFSET LINE' : 'ON THE LINE') : rel > 0 ? '◀ ' + A.fmtLen(d) : A.fmtLen(d) + ' ▶');
     off.classList.toggle('on', on);
-    const side = r.offset > 0 ? 'right' : 'left';
-    setText($('#stakeSub'), (on ? '' : `You're ${side} of the line (facing ${A.shortName(r.b)}) — move ${side === 'right' ? 'left' : 'right'}. `) +
+    const side = rel > 0 ? 'right' : 'left', what = offM ? 'the offset line' : 'the line';
+    setText($('#stakeSub'), (on ? '' : `You're ${side} of ${what} (facing ${A.shortName(r.b)}) — move ${side === 'right' ? 'left' : 'right'}. `) +
       `${A.fmtLen(r.along)} along, of ${A.fmtLen(r.length)} from ${A.shortName(r.a)}.`);
     const g = A.gm.frame.toGeo(r.point.x, r.point.y, 0);
-    A.drawStake(id, { lat: g.lat, lon: g.lon });
+    A.drawStake(id, { lat: g.lat, lon: g.lon }, offM);
   }
 
   // ------------------------------------------------------------------ hand-placement card
@@ -323,6 +336,17 @@
     stake: d => startStake(d.id),
     stakesel: () => startStake($('#tStake').value),
     stakestop: () => stopStake(),
+    stakeoff: d => {
+      if (!A.stake) return;
+      A.stake.offFt = +d.d === 0 ? 0 : Math.max(0, Math.min(200, (A.stake.offFt || 0) + +d.d));
+      setText($('#stakeOffVal'), A.stake.offFt + ' ft');
+      A.scheduleRender();
+    },
+    sbzone: d => {                                            // zone preset for a parcel
+      const z = P.setback.ZONES[d.zone];
+      if (!z) return;
+      A.edit({ op: 'set', path: ['settings', 'setbacks', 'parcels', d.id], value: { zone: d.zone, front: z.front, side: z.side, rear: z.rear } });
+    },
     ptedit: d => A.openEditPoint(d.id),
     ptnote: d => {
       const note = ($('#edNote') || {}).value || '';
@@ -375,7 +399,19 @@
     chkupdate: () => A.checkUpdate(),
     doupdate: () => A.doUpdate(),
     cfgsave: () => A.saveSettings(),
-    cfgdiscard: () => { A.setCfgDirty(false); A.renderPane('settings', 'force'); }
+    cfgdiscard: () => { A.setCfgDirty(false); A.renderPane('settings', 'force'); },
+    ncfgsave: () => A.native && A.native.saveSettings(),
+    ndevices: () => { if (A.native) { window.PRTKNative.refreshDevices(); A.toast('Refreshing…'); } },
+    nbtsettings: () => A.native && window.PRTKNative.openBluetoothSettings(),
+    nexport: () => A.native && A.exportProject(),
+    nimport: () => A.native && window.PRTKNative.openProjectFile(),
+    nlog: () => {
+      if (!A.native) return;
+      let lines = [];
+      try { lines = JSON.parse(window.PRTKNative.getLog()); } catch (e) { lines = A.native.log; }
+      const el = $('#nLog');
+      if (el) el.innerHTML = `<div class="log mono" style="margin-top:8px">${esc(lines.slice(-120).join('\n'))}</div>`;
+    }
   };
 
   function bind() {
@@ -388,13 +424,20 @@
       Promise.resolve(fn(el.dataset, el)).catch(err => { console.error(err); A.toast(String(err.message || err), true); });
     });
     document.addEventListener('change', e => {
+      const sel = e.target.closest('[data-act-change]');
+      if (sel && ACT[sel.dataset.actChange]) { ACT[sel.dataset.actChange](Object.assign({}, sel.dataset, { zone: sel.value })); return; }
       const el = e.target.closest('[data-chg]');
       if (!el) return;
       const key = el.dataset.key;
       if (el.dataset.chg === 'setting') {
         let v = el.type === 'checkbox' ? el.checked : el.value;
         if (el.dataset.num) v = +v;
+        if (el.dataset.path) { A.edit({ op: 'set', path: ['settings'].concat(el.dataset.path.split('.')), value: v }); return; }
         A.edit({ op: 'set', path: ['settings', key], value: v });
+      } else if (el.dataset.chg === 'linetype') {
+        A.edit({ op: 'set', path: ['settings', 'setbacks', 'lines', el.dataset.id, 'type'], value: el.value });
+        A.closePopup();
+        A.toast('Line marked as ' + el.value + ' — setback updated');
       } else if (el.dataset.chg === 'ui') {
         A.ui[key] = el.checked; A.saveUi();
         if (key === 'track') A.showTrack(el.checked);

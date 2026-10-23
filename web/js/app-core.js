@@ -15,7 +15,7 @@
   const P = window.PRTK, A = P.app = P.app || {};
   const ST = P.state, calib = P.calib, nmea = P.nmea, geo = P.geo, locate = P.locate;
 
-  A.VERSION = '2.0.1';
+  A.VERSION = '2.1.0';
   A.model = P.model.build(P.data);
   A.K = geo.US_FT;                       // metres per US survey foot
   A.FT = 1 / geo.US_FT;                  // US survey feet per metre

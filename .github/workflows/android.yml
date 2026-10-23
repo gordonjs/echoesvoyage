@@ -1,0 +1,40 @@
+name: Android app
+
+on:
+  push:
+    branches: [claude/rtk-surveyor-map-app-qb9n84]
+    paths: ['android/**', 'web/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          mkdir -p ../out && cp app/build/outputs/apk/debug/app-debug.apk ../out/ParcelRTK.apk
+          ls -la ../out
+      - uses: actions/upload-artifact@v4
+        with: { name: ParcelRTK-apk, path: out/ParcelRTK.apk }
+      - name: Publish as the "android-latest" release
+        if: github.event_name != 'pull_request'
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          VER=$(grep -o 'val appVersion = "[^"]*"' android/app/build.gradle.kts | cut -d'"' -f2)
+          NOTES="Parcel RTK for Android $VER (debug-signed, built from ${GITHUB_SHA::7}). Download ParcelRTK.apk on the tablet, open it, and allow installing from this source."
+          if gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload android-latest out/ParcelRTK.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit android-latest --notes "$NOTES" --title "Parcel RTK for Android $VER" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create android-latest out/ParcelRTK.apk --title "Parcel RTK for Android $VER" --notes "$NOTES" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
+          fi

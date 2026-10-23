@@ -266,5 +266,63 @@ test('v1 pinned calibration migrates to control points', () => {
   ok(st.control.W16 && st.control.P1NE && st.control.W16.use === true && !st.rough);
 });
 
+// ------------------------------------------------------------------ setbacks
+const setback = J('setback.js');
+test('setback ring sits exactly the required distance inside every line (A-2: 50 front / 30 side)', () => {
+  const sb = setback.build(M, gmT, {});
+  ok(sb.rings.P1 && sb.rings.LOT1, 'rings built');
+  const P = { segs: {} };
+  Object.keys(gmT.segs).forEach(id => { P.segs[id] = gmT.segs[id].xy.map(p => ({ e: p.x, n: p.y })); });
+  let checked = 0, onLine = 0;
+  for (const rid of ['P1', 'LOT1']) {
+    const ring = gmT.rings[rid].xy.map(p => ({ e: p.x, n: p.y }));
+    sb.rings[rid].xy.forEach(q => {
+      ok(cogo.pointInRing({ e: q.x, n: q.y }, ring), rid + ' setback point inside the parcel');
+      // distance to the line it was offset from equals that line's setback; no line is closer than its own setback
+      let own = Infinity;
+      M.rings[rid].segs.forEach(sd => {
+        const id = sd[0], r = cogo.nearestOnPolyline({ e: q.x, n: q.y }, P.segs[id]);
+        const ft = setback.ownFt(M, setback.conf({}), id, rid) * K;
+        ok(r.d > ft - 0.02, `${rid}: setback point is ${r.d.toFixed(2)} m from ${id}, needs ${ft.toFixed(2)}`);
+        if (id === q.seg) own = r.d - ft;
+      });
+      // at a sharp corner the mitered point is exactly d from the line but farther from the finite edge
+      if (Math.abs(own) < 0.02) onLine++;
+      checked++;
+    });
+  }
+  ok(checked > 50 && onLine / checked > 0.9, `checked ${checked} points, ${onLine} exactly on their line`);
+  near(setback.ownFt(M, setback.conf({}), 'p1b3', 'P1'), 50, 0, 'road frontage is the front');
+  near(setback.ownFt(M, setback.conf({}), 'l1w', 'LOT1'), 30, 0, 'west line is a side');
+  near(setback.ownFt(M, setback.conf({ setbacks: { lines: { l1w: { type: 'rear' } } } }), 'l1w', 'LOT1'), 50, 0, 'line type override');
+  near(setback.ownFt(M, setback.conf({ setbacks: { parcels: { LOT1: { zone: 'MR-1', front: 30, side: 20, rear: 20 } } } }), 'l1w', 'LOT1'), 20, 0, 'per-parcel zone');
+});
+test('neighbor band lies outside your line; owned side sign is right', () => {
+  const sb = setback.build(M, gmT, {});
+  near(sb.neighbor.l1w.ft, 20, 0, 'Black Mtn Ranch side: MR-1 20 ft');
+  near(sb.neighbor.l1e.ft, 30, 0, 'Lodgepole Lot 2 side: A-2 30 ft');
+  ok(!sb.neighbor.shI, 'no neighbor band on the internal line');
+  for (const id of ['l1w', 'l1s', 'p1b1', 'p1b2', 'shS', 'l1e', 'p1b5']) {
+    const side = setback.ownedSide(M, gmT, id), xy = gmT.segs[id].xy, k = Math.floor((xy.length - 1) / 2), a = xy[k], b = xy[k + 1];
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+    const q = { e: (a.x + b.x) / 2 + side * dy / L * 2, n: (a.y + b.y) / 2 - side * dx / L * 2 };     // 2 m on the owned side
+    const w = locate.where(M, gmT, solT, q.e, q.n, 0.01, {});
+    ok(w.inOwned, id + ': 2 m to the owned side is inside your land');
+    const q2 = { e: (a.x + b.x) / 2 - side * dy / L * 2, n: (a.y + b.y) / 2 + side * dx / L * 2 };
+    ok(!locate.where(M, gmT, solT, q2.e, q2.n, 0.01, {}).inOwned, id + ': the other side is not');
+  }
+});
+test('setback check: inside the zone near a side line, clear in the middle', () => {
+  const W = M.points.W16, T = M.points.TPB, Lw = Math.hypot(T.e - W.e, T.n - W.n);
+  const d = { e: (T.e - W.e) / Lw, n: (T.n - W.n) / Lw }, mid = { e: (W.e + T.e) / 2, n: (W.n + T.n) / 2 };
+  const at = ft => { const p = calib.fwd(TRUTH, mid.e + d.n * ft, mid.n - d.e * ft); return locate.where(M, gmT, solT, p.x, p.y, 0.01, {}); };
+  const c1 = setback.check(M, {}, at(10));
+  ok(c1 && c1.margin < 0 && c1.requiredFt === 30 && c1.segId === 'l1w', '10 ft in: inside the 30 ft setback zone ' + JSON.stringify(c1));
+  near(c1.margin, -20 * K, 0.05, 'margin −20 ft');
+  const c2 = setback.check(M, {}, at(45));
+  ok(c2 && c2.margin > 0, '45 ft in: clear');
+  ok(setback.check(M, {}, at(-5)) === null, 'outside your land: no setback answer');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) { console.log('\n' + fails.join('\n\n')); process.exit(1); }

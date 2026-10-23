@@ -35,7 +35,7 @@
     map = A.map = L.map('map', { zoomControl: false, maxZoom: 22, zoomSnap: 0.5, wheelPxPerZoomLevel: 90 });
     map.attributionControl.setPrefix(false);
     renderer = L.canvas({ padding: 0.4, tolerance: 9 });
-    ['fill', 'segs', 'labels', 'resid', 'pts', 'ptLabels', 'road', 'saved', 'track', 'stake', 'nav', 'pos', 'adjust']
+    ['fill', 'setback', 'segs', 'labels', 'resid', 'pts', 'ptLabels', 'road', 'saved', 'track', 'stake', 'nav', 'pos', 'adjust']
       .forEach(k => { lyr[k] = L.layerGroup().addTo(map); });
     map.setView(DEFAULT_VIEW, 15);
     map.on('zoomend', zoomLayers);
@@ -55,7 +55,7 @@
     const b = BASES[key];
     if (b) {
       // through the bridge, tiles are cached on the laptop and keep working without internet
-      const url = A.bridgeMode ? 'tiles/' + key + '/{z}/{x}/{y}' : b.url;
+      const url = A.bridgeMode || A.native ? 'tiles/' + key + '/{z}/{x}/{y}' : b.url;
       baseLayer = L.tileLayer(url, { maxNativeZoom: b.native, maxZoom: 22, attribution: b.attr, errorTileUrl: BLANK, keepBuffer: 3 });
       baseLayer.addTo(map);
       baseLayer.bringToBack();
@@ -117,12 +117,44 @@
     });
   }
   function segPopup(id) {
-    const s = model.segments[id];
+    const s = model.segments[id], SB = P.setback, c = SB.conf(A.proj.settings);
+    let sb = '';
+    if (s.role !== 'neighbor' && c.show) {
+      const type = s.role === 'internal' ? 'side' : SB.lineType(model, c, id);
+      const own = s.rings.filter(r => model.rings[r].owned).map(r => `${esc(model.rings[r].short)}: ${SB.ownFt(model, c, id, r)} ft`).join(' · ');
+      sb = `<span>Setback</span><span>${own}</span>` +
+        (s.role === 'boundary' ? `<span>Neighbor's</span><span>${SB.neighborFt(model, c, id)} ft <span class="dim">(assumed)</span></span>` : '') +
+        (s.role === 'boundary' ? `<span>Line type</span><span><select class="inp small" data-chg="linetype" data-id="${id}">
+          ${['front', 'side', 'rear'].map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t}</option>`).join('')}</select></span>` : '');
+    }
     return `<b>${esc(s.name)}</b><div class="hint">${esc(ROLE[s.role])}</div>
       <div class="kv"><span>Call</span><span>${esc(s.call || '')}</span>
         <span>Length</span><span>${A.fmtLen(A.segLengthM(id))}</span>
-        <span>Runs</span><span>${esc(A.shortName(s.a))} → ${esc(A.shortName(s.b))}</span></div>
+        <span>Runs</span><span>${esc(A.shortName(s.a))} → ${esc(A.shortName(s.b))}</span>${sb}</div>
       <div class="row"><button class="btn small primary" data-act="stake" data-id="${id}">Stake out this line</button></div>`;
+  }
+
+  // setback zones: a band inside each of your parcels, and the neighbor's band outside your lines
+  A.sb = null;
+  function drawSetbacks(gm) {
+    lyr.setback.clearLayers();
+    A.sb = null;
+    if (!gm) return;
+    const SB = P.setback, c = SB.conf(A.proj.settings);
+    if (!c.show) return;
+    A.sb = SB.build(model, gm, A.proj.settings);
+    model.order.forEach(rid => {
+      const r = model.rings[rid];
+      if (!r.owned) return;
+      const inner = A.sb.rings[rid];
+      if (!inner) return;
+      // the band between the lot line and the setback line (a polygon with a hole)
+      L.polygon([gm.rings[rid].ll, inner.ll], { renderer, stroke: false, fillColor: r.color, fillOpacity: 0.16, interactive: false }).addTo(lyr.setback);
+      L.polyline(inner.ll.concat([inner.ll[0]]), { renderer, color: r.color, weight: 1.5, opacity: 0.9, dashArray: '2 5', interactive: false }).addTo(lyr.setback);
+    });
+    Object.keys(A.sb.neighbor).forEach(id => {
+      L.polygon(A.sb.neighbor[id].ll, { renderer, stroke: false, fillColor: '#c4ccd4', fillOpacity: 0.14, interactive: false }).addTo(lyr.setback);
+    });
   }
 
   // ------------------------------------------------------------------ monuments
@@ -215,9 +247,11 @@
       const q = A.gm.frame.toEnu(lat, lon), w = locate.where(model, A.gm, A.sol, q.x, q.y, 0, A.proj.settings);
       const verdict = w.inOwned ? `<span class="good-t">Inside ${esc(model.rings[w.inOwned].short)}</span>`
         : w.inNeighbor ? `<span class="bad">Outside — ${esc(model.rings[w.inNeighbor].short)}</span>` : '<span class="bad">Outside your land</span>';
+      const sc = P.setback.check(model, A.proj.settings, w);
       html += `<b>${verdict}</b><div class="kv">
         <span>Property line</span><span>${A.fmtLen(w.edge.d)}</span>
         <span>Nearest line</span><span>${esc(w.edge.name)}</span>
+        ${sc ? `<span>Setback</span><span class="${sc.margin < 0 ? 'warn' : 'good-t'}">${sc.margin < 0 ? 'inside the zone — ' + A.fmtLen(-sc.margin) + ' short of ' + sc.requiredFt + ' ft' : A.fmtLen(sc.margin) + ' clear of the ' + sc.requiredFt + ' ft ' + sc.type + ' setback'}</span>` : ''}
         ${w.status === 'ONLINE' ? `<span>Careful</span><span class="warn">within the outline's uncertainty (${A.fmtAcc(w.sigma)})</span>` : ''}`;
     } else html += '<b>This spot</b><div class="kv">';
     html += `<span>From you</span><span data-live="dist" data-lat="${lat}" data-lon="${lon}">—</span>
@@ -270,13 +304,21 @@
     if (!navLine) navLine = L.polyline(lls, { renderer, color: '#2ecc71', weight: 3, dashArray: '8 8', interactive: false }).addTo(lyr.nav);
     else navLine.setLatLngs(lls);
   };
-  A.drawStake = function (segId, foot) {
+  // the line being staked; offM > 0 draws the offset line that many metres into your land
+  A.drawStake = function (segId, foot, offM) {
     if (!segId || !A.gm) { lyr.stake.clearLayers(); stakeHi = stakeFoot = null; return; }
-    if (!stakeHi || stakeHi._segId !== segId) {
+    offM = offM || 0;
+    if (!stakeHi || stakeHi._segId !== segId || stakeHi._offM !== offM) {
       lyr.stake.clearLayers(); stakeFoot = null;
-      stakeHi = L.polyline(A.gm.segs[segId].ll, { renderer, color: '#ffe14d', weight: 7, opacity: 0.6, interactive: false }).addTo(lyr.stake);
-      stakeHi._segId = segId;
-    } else stakeHi.setLatLngs(A.gm.segs[segId].ll);
+      let ll = A.gm.segs[segId].ll;
+      if (offM) {
+        const side = P.setback.ownedSide(model, A.gm, segId);
+        ll = P.setback.offsetLine(A.gm.segs[segId].xy, side * offM).map(p => { const g = A.gm.frame.toGeo(p.x, p.y, 0); return [g.lat, g.lon]; });
+        L.polyline(A.gm.segs[segId].ll, { renderer, color: '#ffe14d', weight: 3, opacity: 0.35, interactive: false }).addTo(lyr.stake);
+      }
+      stakeHi = L.polyline(ll, { renderer, color: '#ffe14d', weight: 7, opacity: 0.6, interactive: false }).addTo(lyr.stake);
+      stakeHi._segId = segId; stakeHi._offM = offM;
+    }
     const pos = A.live.pos;
     if (foot && pos) {
       const lls = [[pos.lat, pos.lon], [foot.lat, foot.lon]];
@@ -469,6 +511,7 @@
     A.setBaseLayer(A.proj.settings.base);
     if (A.adjust && A.adjust.dragging) { drawPoints(); drawSaved(); return; }   // don't pull the handle away mid-drag
     drawParcels(A.gm, false);
+    drawSetbacks(A.gm);
     drawPoints();
     drawSaved();
     if (A.adjust && !A.adjustAllowed()) A.stopAdjust();

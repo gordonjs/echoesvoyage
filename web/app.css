@@ -52,7 +52,8 @@ input, select { font: inherit; }
          font-variant-numeric: tabular-nums; }
 #edgeInfo { font-weight: 650; display: flex; align-items: center; gap: 6px; min-width: 0; }
 #edgeInfo .arrow { display: inline-block; font-size: 18px; color: var(--accent); transition: transform .25s; }
-#edgeText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#edgeText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#edgeInfo { flex: 1 1 60%; }
 #coords { color: var(--text); font-size: 13px; margin-left: auto; white-space: nowrap; }
 .dim { color: var(--muted); }
 
@@ -163,6 +164,15 @@ details.grp > summary { cursor: pointer; color: var(--muted); font-size: 12px; t
           display: flex; align-items: center; justify-content: center; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
 .handle.rot { background: rgba(176,124,255,.95); }
 .lbl { background: rgba(15,20,25,.75); color: #fff; padding: 1px 6px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; border: none; }
+
+select.inp.small { width: auto; padding: 4px 6px; font-size: 12px; }
+.sk-row { gap: 6px; align-items: center; margin-top: 8px; font-size: 12px; flex-wrap: nowrap; }
+.sk-row .dim { flex: 1 1 auto; min-width: 0; }
+.sk-row b { min-width: 40px; text-align: center; }
+.sk-row .btn.small { padding: 5px 8px; }
+#edgeText .sb-line { display: block; font-size: 12px; font-weight: 600; white-space: normal; }
+#edgeText .sb-in { color: var(--amber); }
+#edgeText .sb-ok { color: var(--green); }
 
 /* labels drawn on the map (parcel names, monument names) */
 .lbl-wrap .lbl { position: absolute; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
