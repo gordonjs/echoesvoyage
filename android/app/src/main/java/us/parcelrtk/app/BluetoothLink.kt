@@ -119,16 +119,13 @@ class BluetoothLink(private val ctx: Context, private val log: (String) -> Unit)
                 try { sock.close() } catch (_: Exception) {}
                 state = "noresponse"
                 detail = "${dev.name ?: dev.address} did not answer — is the receiver on, in Rover mode, Bluetooth set to Classic, and within range?"
-                sleep(backoff); backoff = minOf(backoff * 2, 15000)
+                sleep(backoff); backoff = minOf(backoff * 2, 15000L)
                 continue
             }
             socket = sock
-            backoff = 2000
-            val input: InputStream
-            try {
-                input = sock.inputStream
-                synchronized(writeLock) { out = sock.outputStream }
-            } catch (e: IOException) { closeSocket(); continue }
+            backoff = 2000L
+            val input: InputStream = try { sock.inputStream } catch (e: IOException) { closeSocket(); continue }
+            try { synchronized(writeLock) { out = sock.outputStream } } catch (e: IOException) { closeSocket(); continue }
             state = "open"; detail = dev.name ?: dev.address
             log("connected to receiver ${dev.name ?: dev.address}")
             val buf = ByteArray(4096)

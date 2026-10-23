@@ -46,7 +46,7 @@ class NtripClient(
         while (!stop.get()) {
             try {
                 session()
-                backoff = 2000
+                backoff = 2000L
             } catch (e: Refused) {
                 state = "refused"; detail = e.message ?: "refused"
                 log("caster refused: ${e.message}")
@@ -55,7 +55,7 @@ class NtripClient(
                 if (stop.get()) break
                 state = "error"; detail = e.message ?: e.javaClass.simpleName
                 log("ntrip: $detail — retrying in ${backoff / 1000}s")
-                sleep(backoff); backoff = minOf(backoff * 2, 60000)
+                sleep(backoff); backoff = minOf(backoff * 2, 60000L)
             } finally { since = 0 }
         }
         state = "stopped"
