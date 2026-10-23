@@ -27,6 +27,8 @@ in order the first time. Later, use the **Daily checklist** (Part F).
 - Part G — Using a phone as a second screen
 - Part H — Updating
 - Part I — Troubleshooting
+- Part J — Setbacks and fences
+- Part K — The Android tablet app
 - Quick reference card
 
 ---
@@ -499,6 +501,47 @@ Your settings, password, calibration and saved points are never touched by updat
 | **Outline sits a few feet off the photo** | Normal; the photos themselves are off. Measure monuments (Part E). |
 | **Old screen after updating** | Press **Ctrl+F5**. |
 | **Something else** | Open **Menu → Status → Show bridge log** and send a photo of it. |
+
+---
+
+# Part J — Setbacks and fences
+
+**Setback zones** show on the map as a shaded band just inside your lines (where a building
+isn't allowed) and a grey band outside them (the neighbor's setback). The second line of the
+top bar says whether you're inside a setback zone and by how much.
+
+- **Menu → Settings → Setbacks**: pick each parcel's zone district (A-2 is the default:
+  50 ft front, 30 ft side, 50 ft rear; MR-1 is 30/20/20) or type your own numbers.
+- The road frontage counts as the **front**; every other line as a **side**. To change a
+  line, tap it on the map and pick front, side or rear.
+- **Verify with Jefferson County Planning & Zoning (303-271-8700) before you build.**
+  Plat notes and amendments can change the numbers; the app only draws what you tell it.
+
+**Fence offset.** Stake out a line (Tools, or tap the line), then use **−1 ft / +1 ft** on
+the stake card to move the target that many feet into your land. The card then guides you
+to the offset line, so the fence stands clearly on your side.
+
+---
+
+# Part K — The Android tablet app
+
+The same app on a tablet, with no laptop: the tablet talks to the Surveyor over Bluetooth
+and fetches corrections over its own internet (cell data or a phone hotspot).
+
+1. On the tablet, open **https://github.com/gordonjs/echoesvoyage/releases/tag/android-latest**
+   and download **ParcelRTK.apk**. Open it and allow installing from this source.
+2. Pair the Surveyor in the tablet's Bluetooth settings (Surveyor Bluetooth: **Classic**,
+   switch on **Rover**).
+3. Open Parcel RTK. Allow the Bluetooth and notification permissions it asks for.
+4. **Menu → Settings**: pick the paired receiver, turn on corrections, enter your
+   PointPerfect login, **Save settings**.
+5. **Bring over your calibration**: on the laptop, copy `rtk_data\project.json` (in the
+   Parcel RTK folder) to the tablet (email, Drive, USB), then **Settings → Import project…**.
+   Going the other way, **Export project** and replace that file on the laptop while the
+   laptop program is closed.
+
+Everything else works as on the laptop. The tablet keeps its own copy of the project; the
+two don't sync by themselves.
 
 ---
 

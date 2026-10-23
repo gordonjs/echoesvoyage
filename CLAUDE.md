@@ -28,8 +28,9 @@
   - `tests/browser_smoke.js` runs a temp copy.
 - **Branch `claude/rtk-surveyor-map-app-qb9n84` is what the in-app updater downloads.**
   Pushing there ships to the user, so run all tests first.
-- **Bump `VERSION` together in two places:** `rtk_bridge.py` (the updater compares it) and
-  `A.VERSION` in `web/js/app-core.js` (a mismatch shows a "reload" banner).
+- **Bump `VERSION` together in three places:** `rtk_bridge.py` (the updater compares it),
+  `A.VERSION` in `web/js/app-core.js` (a mismatch shows a "reload" banner) and `appVersion` in
+  `android/app/build.gradle.kts`.
 - **Keep the app on `http://localhost:8000` by default.** That origin's localStorage holds
   version 1's data (key `parcelRTK`), which `state.migrateV1` imports. The bridge opens the
   user's *default* browser (as an `--app` window when it's Edge, Chrome or Brave) for the
@@ -155,6 +156,28 @@ The browser test covers:
   0.05 ft.
 
 Set `SHOTS=dir` to get screenshots. Read them before saying UI work is done.
+
+## Setbacks (`web/js/setback.js`)
+- Settings live in `settings.setbacks`: `{show, parcels:{P1,LOT1:{zone,front,side,rear}}, lines:{segId:{type, neighborFt}}, neighborFt}`.
+  Defaults A-2 50/30/50 (Jefferson County Zoning Resolution §33); MR-1 30/20/20 (§31). Road
+  frontage = front, others = side unless overridden by tapping the line.
+- Geometry works on `gm` (ENU metres): mitered per-edge inward offset of each owned ring,
+  then corners that fall closer than another edge's setback are dropped (sharp corners).
+  Neighbor band = outward offset of each boundary segment. `check()` turns a `locate.where`
+  answer into a margin to the controlling setback line.
+- Fence offset: `locate.stakeout` offset minus `ownedSide(seg) * offM`.
+
+## Android (`android/`)
+- Kotlin shell: `MainActivity` (WebView + `window.PRTKNative`), `BridgeService` (foreground;
+  `BluetoothLink` SPP + `NtripClient` + log), `TileCache` (intercepts `tiles/…`). The web app
+  is staged from `web/` into `web-assets/` at build time (gitignored).
+- JS side: `web/js/app-native.js` — when `PRTKNative` exists: `A.native`, bridgeMode false,
+  NMEA/status/config pushed in by the shell, settings form, project import/export,
+  `A.download` → file picker. `tests/browser_smoke.js` runs it with a stand-in shell.
+- Built only on GitHub Actions (`.github/workflows/android.yml` → release `android-latest`,
+  debug-signed). dl.google.com is blocked from the Claude sandbox, so the APK can't be built
+  here; read the Actions logs (`mcp__github__get_job_logs`) to fix compile errors. Bump
+  `appVersion` in `android/app/build.gradle.kts` with the other two version strings.
 
 ## Known limits / ideas
 - Phones reach the app over plain http on the LAN, so there's no screen wake lock,
