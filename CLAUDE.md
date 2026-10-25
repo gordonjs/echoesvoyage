@@ -159,7 +159,8 @@ Set `SHOTS=dir` to get screenshots. Read them before saying UI work is done.
 
 ## Setbacks (`web/js/setback.js`)
 - Settings live in `settings.setbacks`: `{show, parcels:{P1,LOT1:{zone,front,side,rear}}, lines:{segId:{type, neighborFt}}, neighborFt}`.
-  Defaults A-2 50/30/50 (Jefferson County Zoning Resolution §33); MR-1 30/20/20 (§31). Road
+  **Both parcels are zoned A-2 (confirmed by the user, Oct 2026).** Defaults A-2 50/30/50
+  (Jefferson County Zoning Resolution §33); MR-1 30/20/20 (§31). Road
   frontage = front, others = side unless overridden by tapping the line.
 - Geometry works on `gm` (ENU metres): mitered per-edge inward offset of each owned ring,
   then corners that fall closer than another edge's setback are dropped (sharp corners).
