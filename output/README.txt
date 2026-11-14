@@ -14,9 +14,13 @@ SW_CallFirst.mbtiles   38.7 MB   classes e, f
     name='SW Call-First' format=png type=overlay zoom 6-13
     bounds=-120.00647,31.33216,-102.04152,42.00184   63,204 tiles, 58,477 unique images
 preview_<product>.png, preview_all.png - z7 mosaics of the tiles over state outlines
-SW_Heli_ContentPack.zip   58.7 MB   ForeFlight content pack:
+SW_Heli_ContentPack.zip   66.0 MB   ForeFlight content pack (v1.1):
     the three overlays + one POI map layer per category (KMZ) +
-    navdata/user_waypoints.csv (every POI as a searchable user waypoint)
+    navdata/user_waypoints.csv (every POI as a searchable user waypoint).
+    In the pack the overlays are re-encoded as standard RGBA PNG tiles in a
+    plain tiles table (same pixels): ForeFlight drew the compact palette /
+    deduplicated tiles above inconsistently (BLM dark grey in UT, nearly
+    invisible in CO). The .mbtiles files above keep the compact format.
 SW_POI.csv - every POI with landing class, nearest landable BLM, elevation, flags
 preview_POI.png - POIs over the faded landing classes
 

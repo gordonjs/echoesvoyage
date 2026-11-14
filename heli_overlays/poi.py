@@ -19,8 +19,8 @@ Each POI gets
 
 Outputs
   work/poi.gpkg, output/SW_POI.csv           full table
-  work/pack/SW_Heli/layers/SW_POI_<cat>.kmz  one ForeFlight map layer per category
-  work/pack/SW_Heli/navdata/user_waypoints.csv  ForeFlight user waypoints
+  work/poi/layers/SW_POI_<cat>.kmz           one ForeFlight map layer per category
+  work/poi/navdata/user_waypoints.csv        ForeFlight user waypoints
   output/preview_POI.png
 """
 import argparse
@@ -57,7 +57,7 @@ GDAL_ENV = dict(GDAL_CURL_CA_BUNDLE="/root/.ccr/ca-bundle.crt",
                 GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
                 CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif")
 
-PACK = config.WORK / "pack" / "SW_Heli"   # content-pack folder (see make_content_pack.py)
+PACK = config.WORK / "poi"   # POI layers + waypoints; make_content_pack.py packs them
 GEOD = Geod(ellps="WGS84")
 M_TO_FT = 3.28084
 

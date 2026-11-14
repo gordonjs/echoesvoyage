@@ -34,5 +34,5 @@ Network hosts used: `prd-tnm.s3.amazonaws.com` (USGS boundaries), `www.scienceba
 5. `size_gate.py` estimates the z13 size from the z6-12 build.
 6. `validate.py` writes the previews, runs the spot checks, the overlap check, and the 2019 Dingell Act currency check.
 7. `poi.py` builds the POIs. It reads GNIS and OpenStreetMap: the Geofabrik extracts if they can be downloaded, otherwise the OSM-derived Overture Maps base theme read from S3 via `overture.py`. It annotates each POI and writes the KMZ layers plus `user_waypoints.csv`.
-8. `make_content_pack.py` assembles the ForeFlight content pack.
+8. `make_content_pack.py` assembles the ForeFlight content pack. It re-encodes the overlays with `convert_mbtiles.py` as standard RGBA PNG tiles in a plain `tiles` table; the pixels are unchanged. ForeFlight drew the compact palette-PNG, deduplicated layout inconsistently: the same BLM fill came out dark grey in Utah and almost invisible in Colorado.
 9. `write_readme.py` writes `output/README.txt`.

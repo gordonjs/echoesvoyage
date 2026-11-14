@@ -56,7 +56,11 @@ def main():
     if pack.exists():
         w(f"SW_Heli_ContentPack.zip   {mb(pack.stat().st_size)}   ForeFlight content pack:")
         w("    the three overlays + one POI map layer per category (KMZ) +")
-        w("    navdata/user_waypoints.csv (every POI as a searchable user waypoint)")
+        w("    navdata/user_waypoints.csv (every POI as a searchable user waypoint).")
+        w("    In the pack the overlays are re-encoded as standard RGBA PNG tiles in a")
+        w("    plain tiles table (same pixels): ForeFlight drew the compact palette /")
+        w("    deduplicated tiles above inconsistently (BLM dark grey in UT, nearly")
+        w("    invisible in CO). The .mbtiles files above keep the compact format.")
     if (config.OUTPUT / "SW_POI.csv").exists():
         w("SW_POI.csv - every POI with landing class, nearest landable BLM, elevation, flags")
         w("preview_POI.png - POIs over the faded landing classes")
